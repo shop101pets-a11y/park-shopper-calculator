@@ -192,7 +192,7 @@ function buildSummary() {
   const orderTotal = Math.round((itemsTotal + shippingFee) * 100) / 100;
 
   let text = blocks.join('\n\n');
-  text += `\n\n---\nshipping (${weight}) - ${formatMoney(shippingFee)}\norder total ${formatMoney(orderTotal)}`;
+  text += `\n\n---\nshipping - ${formatMoney(shippingFee)}\norder total ${formatMoney(orderTotal)}`;
 
   return text;
 }

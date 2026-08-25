@@ -75,7 +75,7 @@ module.exports = async (req, res) => {
     checkout_options: {
       ask_for_shipping_address: true,
       shipping_fee: {
-        name: `Shipping (${packageWeight})`,
+        name: 'Shipping',
         charge: { amount: shippingCents, currency: 'USD' },
       },
     },
