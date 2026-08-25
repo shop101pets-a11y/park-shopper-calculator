@@ -34,12 +34,39 @@
       <p id="empty-state" class="empty-state">No items yet — add one above.</p>
     </section>
 
+    <section class="shipping-section">
+      <h2>Package weight</h2>
+      <div class="weight-options">
+        <label class="weight-option">
+          <input type="radio" name="package-weight" value="light">
+          <span>Light <em>$7.75</em></span>
+        </label>
+        <label class="weight-option">
+          <input type="radio" name="package-weight" value="normal" checked>
+          <span>Normal <em>$8.35</em></span>
+        </label>
+        <label class="weight-option">
+          <input type="radio" name="package-weight" value="heavy">
+          <span>Heavy <em>$9.86</em></span>
+        </label>
+      </div>
+    </section>
+
     <section class="summary-section">
       <div class="summary-header">
         <h2>Summary</h2>
         <button id="copy-btn" class="btn-copy" type="button">Copy to clipboard</button>
       </div>
       <pre id="summary-output" class="summary-output"></pre>
+    </section>
+
+    <section class="payment-link-section">
+      <button id="create-link-btn" class="btn-add btn-full" type="button">Create Square payment link</button>
+      <div id="payment-link-result" class="payment-link-result" style="display:none;">
+        <input id="payment-link-url" type="text" readonly>
+        <button id="copy-link-btn" class="btn-copy" type="button">Copy link</button>
+      </div>
+      <p id="payment-link-error" class="payment-link-error" style="display:none;"></p>
     </section>
   </div>
 

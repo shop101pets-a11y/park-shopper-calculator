@@ -2,6 +2,7 @@ const TAX_RATE = 0.065;
 const FEE_LOW = 3;
 const FEE_HIGH = 5;
 const FEE_THRESHOLD = 25;
+const SHIPPING_FEES = { light: 7.75, normal: 8.35, heavy: 9.86 };
 
 /**
  * Core pricing formulas.
@@ -32,6 +33,16 @@ const emptyState = document.getElementById('empty-state');
 const summaryOutput = document.getElementById('summary-output');
 const copyBtn = document.getElementById('copy-btn');
 const clearAllBtn = document.getElementById('clear-all');
+const weightInputs = document.querySelectorAll('input[name="package-weight"]');
+const createLinkBtn = document.getElementById('create-link-btn');
+const paymentLinkResult = document.getElementById('payment-link-result');
+const paymentLinkUrlInput = document.getElementById('payment-link-url');
+const copyLinkBtn = document.getElementById('copy-link-btn');
+const paymentLinkError = document.getElementById('payment-link-error');
+
+function getSelectedWeight() {
+  return document.querySelector('input[name="package-weight"]:checked').value;
+}
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -59,19 +70,12 @@ itemsList.addEventListener('click', (e) => {
   render();
 });
 
+weightInputs.forEach((input) => input.addEventListener('change', render));
+
 copyBtn.addEventListener('click', async () => {
   const text = summaryOutput.textContent;
   if (!text) return;
-  try {
-    await navigator.clipboard.writeText(text);
-  } catch (err) {
-    const range = document.createRange();
-    range.selectNode(summaryOutput);
-    window.getSelection().removeAllRanges();
-    window.getSelection().addRange(range);
-    document.execCommand('copy');
-    window.getSelection().removeAllRanges();
-  }
+  await copyText(text);
   copyBtn.textContent = 'Copied!';
   copyBtn.classList.add('copied');
   setTimeout(() => {
@@ -80,9 +84,70 @@ copyBtn.addEventListener('click', async () => {
   }, 1500);
 });
 
+copyLinkBtn.addEventListener('click', async () => {
+  const url = paymentLinkUrlInput.value;
+  if (!url) return;
+  await copyText(url);
+  copyLinkBtn.textContent = 'Copied!';
+  setTimeout(() => {
+    copyLinkBtn.textContent = 'Copy link';
+  }, 1500);
+});
+
+createLinkBtn.addEventListener('click', async () => {
+  if (!items.length) return;
+
+  paymentLinkError.style.display = 'none';
+  paymentLinkResult.style.display = 'none';
+  createLinkBtn.disabled = true;
+  createLinkBtn.textContent = 'Creating link...';
+
+  try {
+    const response = await fetch('/api/create-payment-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: items.map((item) => ({ name: item.name, price: item.price })),
+        packageWeight: getSelectedWeight(),
+      }),
+    });
+
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+
+    paymentLinkUrlInput.value = data.url;
+    paymentLinkResult.style.display = 'flex';
+  } catch (err) {
+    paymentLinkError.textContent = `Couldn't create payment link: ${err.message}`;
+    paymentLinkError.style.display = 'block';
+  } finally {
+    createLinkBtn.disabled = false;
+    createLinkBtn.textContent = 'Create Square payment link';
+  }
+});
+
+async function copyText(text) {
+  try {
+    await navigator.clipboard.writeText(text);
+  } catch (err) {
+    const temp = document.createElement('textarea');
+    temp.value = text;
+    temp.style.position = 'fixed';
+    temp.style.opacity = '0';
+    document.body.appendChild(temp);
+    temp.select();
+    document.execCommand('copy');
+    document.body.removeChild(temp);
+  }
+}
+
 function render() {
   itemsList.innerHTML = '';
   emptyState.style.display = items.length ? 'none' : 'block';
+  createLinkBtn.disabled = !items.length;
 
   items.forEach((item) => {
     const tax = calcTax(item.price);
@@ -103,6 +168,8 @@ function render() {
   });
 
   summaryOutput.textContent = buildSummary();
+  paymentLinkResult.style.display = 'none';
+  paymentLinkError.style.display = 'none';
 }
 
 function buildSummary() {
@@ -119,12 +186,13 @@ function buildSummary() {
     ].join('\n');
   });
 
-  let text = blocks.join('\n\n');
+  const weight = getSelectedWeight();
+  const shippingFee = SHIPPING_FEES[weight];
+  const itemsTotal = items.reduce((sum, item) => sum + calcItemTotal(item.price), 0);
+  const orderTotal = Math.round((itemsTotal + shippingFee) * 100) / 100;
 
-  if (items.length > 1) {
-    const grandTotal = items.reduce((sum, item) => sum + calcItemTotal(item.price), 0);
-    text += `\n\n---\nGrand total (${items.length} items): ${formatMoney(Math.round(grandTotal * 100) / 100)}`;
-  }
+  let text = blocks.join('\n\n');
+  text += `\n\n---\nshipping (${weight}) - ${formatMoney(shippingFee)}\norder total ${formatMoney(orderTotal)}`;
 
   return text;
 }
