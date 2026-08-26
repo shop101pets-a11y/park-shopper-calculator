@@ -203,4 +203,23 @@ function escapeHtml(str) {
   return div.innerHTML;
 }
 
+// --- Tabs ---
+const tabCalculator = document.getElementById('tab-calculator');
+const tabFinances = document.getElementById('tab-finances');
+const calculatorView = document.getElementById('calculator-view');
+const financesView = document.getElementById('finances-view');
+
+tabCalculator.addEventListener('click', () => switchTab('calculator'));
+tabFinances.addEventListener('click', () => switchTab('finances'));
+
+function switchTab(tab) {
+  const showFinances = tab === 'finances';
+  calculatorView.classList.toggle('hidden', showFinances);
+  financesView.classList.toggle('hidden', !showFinances);
+  tabCalculator.classList.toggle('active', !showFinances);
+  tabFinances.classList.toggle('active', showFinances);
+  tabCalculator.setAttribute('aria-selected', String(!showFinances));
+  tabFinances.setAttribute('aria-selected', String(showFinances));
+}
+
 render();
