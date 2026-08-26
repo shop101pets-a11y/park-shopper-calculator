@@ -45,13 +45,23 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const orders = (data.orders || []).filter(
+    const allOrders = data.orders || [];
+    const orders = allOrders.filter(
       (order) => order.metadata && order.metadata.source === OUR_SOURCE_TAG
     );
 
     const rows = orders.flatMap(parseOrderIntoRows);
 
-    res.status(200).json({ rows });
+    res.status(200).json({
+      rows,
+      _debug: {
+        totalCompletedOrders: allOrders.length,
+        taggedOrders: orders.length,
+        sampleOrder: allOrders[0]
+          ? { id: allOrders[0].id, metadata: allOrders[0].metadata || null, state: allOrders[0].state }
+          : null,
+      },
+    });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }
