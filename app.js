@@ -222,4 +222,108 @@ function switchTab(tab) {
   tabFinances.setAttribute('aria-selected', String(showFinances));
 }
 
+// --- Finances ---
+// Rows pulled from Square give us the revenue side (customer, item, qty,
+// itemPrice, shipping, shopperFee). Discount/cost/shippingCost are entered
+// by hand, since Square has no visibility into what we actually pay.
+let financeRows = [];
+
+const syncOrdersBtn = document.getElementById('sync-orders-btn');
+const syncError = document.getElementById('sync-error');
+const financeTableBody = document.getElementById('finance-table-body');
+const financeEmptyState = document.getElementById('finance-empty-state');
+const statOrders = document.getElementById('stat-orders');
+const statCredit = document.getElementById('stat-credit');
+const statDebit = document.getElementById('stat-debit');
+const statEarnings = document.getElementById('stat-earnings');
+const statShopperFee = document.getElementById('stat-shopper-fee');
+
+syncOrdersBtn.addEventListener('click', async () => {
+  syncError.style.display = 'none';
+  syncOrdersBtn.disabled = true;
+  syncOrdersBtn.textContent = 'Syncing...';
+
+  try {
+    const response = await fetch('/api/sync-orders');
+    const data = await response.json();
+
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+
+    financeRows = data.rows.map((row) => ({
+      ...row,
+      discount: 20,
+      cost: 0,
+      shippingCost: 0,
+    }));
+    renderFinances();
+  } catch (err) {
+    syncError.textContent = `Couldn't sync from Square: ${err.message}`;
+    syncError.style.display = 'block';
+  } finally {
+    syncOrdersBtn.disabled = false;
+    syncOrdersBtn.textContent = 'Sync from Square';
+  }
+});
+
+financeTableBody.addEventListener('change', (e) => {
+  const field = e.target.dataset.field;
+  if (!field) return;
+  const index = Number(e.target.closest('tr').dataset.index);
+  const row = financeRows[index];
+  if (!row) return;
+
+  row[field] = field === 'discount' ? Number(e.target.value) : parseFloat(e.target.value) || 0;
+  renderFinances();
+});
+
+function renderFinances() {
+  financeTableBody.innerHTML = '';
+  financeEmptyState.style.display = financeRows.length ? 'none' : 'block';
+
+  const orderIds = new Set();
+  let debitBalance = 0;
+  let creditBalance = 0;
+  let shopperFeeSum = 0;
+
+  financeRows.forEach((row, index) => {
+    orderIds.add(row.orderId);
+
+    const total = row.itemPrice + row.shipping;
+    const totalCost = row.cost + row.shippingCost;
+    debitBalance += total;
+    creditBalance += totalCost;
+    shopperFeeSum += row.shopperFee;
+
+    const tr = document.createElement('tr');
+    tr.dataset.index = index;
+    tr.innerHTML = `
+      <td>${escapeHtml(row.customer)}</td>
+      <td>${escapeHtml(row.item)}</td>
+      <td>${row.quantity}</td>
+      <td>${formatMoney(row.itemPrice)}</td>
+      <td>${formatMoney(row.shipping)}</td>
+      <td>${formatMoney(total)}</td>
+      <td>
+        <select data-field="discount">
+          <option value="20" ${row.discount === 20 ? 'selected' : ''}>20%</option>
+          <option value="35" ${row.discount === 35 ? 'selected' : ''}>35%</option>
+        </select>
+      </td>
+      <td><input type="number" step="0.01" min="0" data-field="cost" value="${row.cost}"></td>
+      <td><input type="number" step="0.01" min="0" data-field="shippingCost" value="${row.shippingCost}"></td>
+      <td>${formatMoney(totalCost)}</td>
+    `;
+    financeTableBody.appendChild(tr);
+  });
+
+  statOrders.textContent = orderIds.size;
+  statCredit.textContent = formatMoney(Math.round(creditBalance * 100) / 100);
+  statDebit.textContent = formatMoney(Math.round(debitBalance * 100) / 100);
+  statEarnings.textContent = formatMoney(Math.round((debitBalance - creditBalance) * 100) / 100);
+  statShopperFee.textContent = formatMoney(Math.round(shopperFeeSum * 100) / 100);
+}
+
 render();
+renderFinances();

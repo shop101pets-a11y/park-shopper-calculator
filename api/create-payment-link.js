@@ -1,11 +1,11 @@
 const { randomUUID } = require('node:crypto');
+const { SQUARE_VERSION, getSquareConfig } = require('./_square');
 
 const TAX_RATE = '6.5';
 const FEE_LOW_CENTS = 300;
 const FEE_HIGH_CENTS = 500;
 const FEE_THRESHOLD_CENTS = 2500;
 const SHIPPING_FEE_CENTS = { light: 775, normal: 835, heavy: 986 };
-const SQUARE_VERSION = '2024-08-21';
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -26,17 +26,11 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const accessToken = process.env.SQUARE_ACCESS_TOKEN;
-  const locationId = process.env.SQUARE_LOCATION_ID;
+  const { accessToken, locationId, baseUrl } = getSquareConfig();
   if (!accessToken || !locationId) {
     res.status(500).json({ error: 'Square credentials are not configured on the server' });
     return;
   }
-
-  const environment = process.env.SQUARE_ENVIRONMENT === 'production' ? 'production' : 'sandbox';
-  const baseUrl = environment === 'production'
-    ? 'https://connect.squareup.com'
-    : 'https://connect.squareupsandbox.com';
 
   const taxUid = 'sales-tax';
   const lineItems = [];
@@ -71,6 +65,7 @@ module.exports = async (req, res) => {
       location_id: locationId,
       line_items: lineItems,
       taxes: [{ uid: taxUid, name: 'Sales Tax', percentage: TAX_RATE, scope: 'LINE_ITEM' }],
+      metadata: { source: 'park-shopper-app' },
     },
     checkout_options: {
       ask_for_shipping_address: true,

@@ -356,9 +356,24 @@ header h1 {
   margin-bottom: 20px;
 }
 
-.finance-table-section h2 {
-  margin: 0 0 12px;
+.finance-table-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 12px;
+}
+
+.finance-table-header h2 {
+  margin: 0;
   font-size: 1rem;
+}
+
+.finance-table input[type="number"] {
+  width: 80px;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
 }
 
 .table-scroll {

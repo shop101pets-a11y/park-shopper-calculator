@@ -101,7 +101,11 @@
       </section>
 
       <section class="finance-table-section">
-        <h2>Orders</h2>
+        <div class="finance-table-header">
+          <h2>Orders</h2>
+          <button id="sync-orders-btn" class="btn-add" type="button">Sync from Square</button>
+        </div>
+        <p id="sync-error" class="payment-link-error" style="display:none;"></p>
         <div class="table-scroll">
           <table class="finance-table">
             <thead>
