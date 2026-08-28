@@ -28,6 +28,10 @@ body {
   max-width: 560px;
 }
 
+.app.wide {
+  max-width: 1200px;
+}
+
 header h1 {
   margin: 0 0 4px;
   font-size: 1.5rem;

@@ -204,6 +204,7 @@ function escapeHtml(str) {
 }
 
 // --- Tabs ---
+const appEl = document.querySelector('.app');
 const tabCalculator = document.getElementById('tab-calculator');
 const tabFinances = document.getElementById('tab-finances');
 const calculatorView = document.getElementById('calculator-view');
@@ -216,6 +217,7 @@ function switchTab(tab) {
   const showFinances = tab === 'finances';
   calculatorView.classList.toggle('hidden', showFinances);
   financesView.classList.toggle('hidden', !showFinances);
+  appEl.classList.toggle('wide', showFinances);
   tabCalculator.classList.toggle('active', !showFinances);
   tabFinances.classList.toggle('active', showFinances);
   tabCalculator.setAttribute('aria-selected', String(!showFinances));
@@ -322,6 +324,7 @@ function renderFinances() {
       <td>${formatMoney(cost)}</td>
       <td><input type="number" step="0.01" min="0" data-field="shippingCost" value="${row.shippingCost}"></td>
       <td>${formatMoney(totalCost)}</td>
+      <td>${formatMoney(total - totalCost)}</td>
     `;
     financeTableBody.appendChild(tr);
   });
