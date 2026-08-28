@@ -224,9 +224,17 @@ function switchTab(tab) {
 
 // --- Finances ---
 // Rows pulled from Square give us the revenue side (customer, item, qty,
-// itemPrice, shipping, shopperFee). Discount/cost/shippingCost are entered
-// by hand, since Square has no visibility into what we actually pay.
+// itemPrice, shipping, shopperFee). Discount is picked by hand and drives
+// cost; shippingCost is entered by hand, since Square has no visibility
+// into what we actually pay for either.
 let financeRows = [];
+
+// itemPrice already includes 6.5% tax (retail * 1.065), so scaling it by
+// (1 - discount) applies the discount to retail and keeps the same tax rate:
+// (retail * (1 - discount)) * 1.065 === itemPrice * (1 - discount)
+function calcCost(row) {
+  return row.itemPrice * (1 - row.discount / 100);
+}
 
 const syncOrdersBtn = document.getElementById('sync-orders-btn');
 const syncError = document.getElementById('sync-error');
@@ -254,7 +262,6 @@ syncOrdersBtn.addEventListener('click', async () => {
     financeRows = data.rows.map((row) => ({
       ...row,
       discount: 20,
-      cost: 0,
       shippingCost: 0,
     }));
     renderFinances();
@@ -291,7 +298,8 @@ function renderFinances() {
     orderIds.add(row.orderId);
 
     const total = row.itemPrice + row.shipping;
-    const totalCost = row.cost + row.shippingCost;
+    const cost = calcCost(row);
+    const totalCost = cost + row.shippingCost;
     debitBalance += total;
     creditBalance += totalCost;
     shopperFeeSum += row.shopperFee;
@@ -311,7 +319,7 @@ function renderFinances() {
           <option value="35" ${row.discount === 35 ? 'selected' : ''}>35%</option>
         </select>
       </td>
-      <td><input type="number" step="0.01" min="0" data-field="cost" value="${row.cost}"></td>
+      <td>${formatMoney(cost)}</td>
       <td><input type="number" step="0.01" min="0" data-field="shippingCost" value="${row.shippingCost}"></td>
       <td>${formatMoney(totalCost)}</td>
     `;
