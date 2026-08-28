@@ -58,8 +58,8 @@ module.exports = async (req, res) => {
 
     for (const row of freshRows) {
       await sql`
-        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, shipping)
-        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.shipping})
+        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping)
+        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping})
         ON CONFLICT (order_id, line_uid) DO NOTHING
       `;
     }
@@ -88,6 +88,8 @@ function parseOrderIntoRows(order) {
     .filter((sc) => sc.name === 'Shipping')
     .reduce((sum, sc) => sum + (sc.total_money?.amount || 0), 0);
 
+  const tipCents = order.total_tip_money?.amount || 0;
+
   // Item lines and their "<name> - shopper fee" lines are adjacent pairs, in
   // the order this app created them in (see api/create-payment-link.js).
   // Paired by position rather than by name, since an order can legitimately
@@ -104,11 +106,12 @@ function parseOrderIntoRows(order) {
 
   const itemTotalCents = pairs.reduce((sum, p) => sum + (p.itemLine.total_money?.amount || 0), 0);
 
+  const shareOf = (lineTotalCents, poolCents) => (itemTotalCents > 0
+    ? Math.round((lineTotalCents / itemTotalCents) * poolCents)
+    : 0);
+
   return pairs.map(({ itemLine, feeCents }) => {
     const lineTotalCents = itemLine.total_money?.amount || 0;
-    const shippingShareCents = itemTotalCents > 0
-      ? Math.round((lineTotalCents / itemTotalCents) * shippingCents)
-      : 0;
 
     return {
       orderId: order.id,
@@ -117,7 +120,8 @@ function parseOrderIntoRows(order) {
       item: itemLine.name,
       quantity: Number(itemLine.quantity) || 1,
       itemPrice: lineTotalCents / 100,
-      shipping: shippingShareCents / 100,
+      shipping: shareOf(lineTotalCents, shippingCents) / 100,
+      tip: shareOf(lineTotalCents, tipCents) / 100,
       shopperFee: feeCents / 100,
     };
   });

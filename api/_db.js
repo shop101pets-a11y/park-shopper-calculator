@@ -39,6 +39,8 @@ async function ensureSchema(sql) {
   await sql`DELETE FROM finance_rows WHERE line_uid IS NULL`;
   await sql`ALTER TABLE finance_rows DROP CONSTRAINT IF EXISTS finance_rows_order_id_item_key`;
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS finance_rows_order_line_uid_key ON finance_rows (order_id, line_uid)`;
+
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tip NUMERIC NOT NULL DEFAULT 0`;
 }
 
 function rowToJson(row) {
@@ -50,6 +52,7 @@ function rowToJson(row) {
     quantity: Number(row.quantity),
     itemPrice: Number(row.item_price),
     shopperFee: Number(row.shopper_fee),
+    tip: Number(row.tip),
     shipping: Number(row.shipping),
     discount: Number(row.discount),
     shippingCost: Number(row.shipping_cost),

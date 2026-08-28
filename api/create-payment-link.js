@@ -73,6 +73,9 @@ module.exports = async (req, res) => {
         name: 'Shipping',
         charge: { amount: shippingCents, currency: 'USD' },
       },
+      allow_tipping: true,
+      tip_percentages: [0, 5, 10],
+      custom_tip_field: true,
     },
   };
 
