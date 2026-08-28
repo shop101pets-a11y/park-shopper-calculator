@@ -73,9 +73,10 @@ module.exports = async (req, res) => {
         name: 'Shipping',
         charge: { amount: shippingCents, currency: 'USD' },
       },
+      // Percentages/custom-amount behavior isn't controllable per-request -
+      // it's an account-wide setting (Square Dashboard > Payments & orders >
+      // Payment links > Settings > General > Tip options).
       allow_tipping: true,
-      tip_percentages: [0, 5, 10],
-      custom_tip_field: true,
     },
   };
 
