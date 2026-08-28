@@ -299,7 +299,7 @@ function renderFinances() {
   financeRows.forEach((row, index) => {
     orderIds.add(row.orderId);
 
-    const total = row.itemPrice + row.shipping;
+    const total = row.itemPrice + row.shopperFee + row.shipping;
     const cost = calcCost(row);
     const totalCost = cost + row.shippingCost;
     debitBalance += total;
@@ -313,6 +313,7 @@ function renderFinances() {
       <td>${escapeHtml(row.item)}</td>
       <td>${row.quantity}</td>
       <td>${formatMoney(row.itemPrice)}</td>
+      <td>${formatMoney(row.shopperFee)}</td>
       <td>${formatMoney(row.shipping)}</td>
       <td>${formatMoney(total)}</td>
       <td>
