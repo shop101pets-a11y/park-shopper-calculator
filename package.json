@@ -1,0 +1,7 @@
+{
+  "name": "park-shopper-calculator",
+  "private": true,
+  "dependencies": {
+    "@neondatabase/serverless": "^0.10.4"
+  }
+}

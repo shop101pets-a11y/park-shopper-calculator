@@ -248,6 +248,21 @@ const statDebit = document.getElementById('stat-debit');
 const statEarnings = document.getElementById('stat-earnings');
 const statShopperFee = document.getElementById('stat-shopper-fee');
 
+async function loadFinanceRows() {
+  try {
+    const response = await fetch('/api/finance-rows');
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    financeRows = data.rows;
+    renderFinances();
+  } catch (err) {
+    syncError.textContent = `Couldn't load saved orders: ${err.message}`;
+    syncError.style.display = 'block';
+  }
+}
+
 syncOrdersBtn.addEventListener('click', async () => {
   syncError.style.display = 'none';
   syncOrdersBtn.disabled = true;
@@ -261,11 +276,7 @@ syncOrdersBtn.addEventListener('click', async () => {
       throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
     }
 
-    financeRows = data.rows.map((row) => ({
-      ...row,
-      discount: 20,
-      shippingCost: 0,
-    }));
+    financeRows = data.rows;
     renderFinances();
   } catch (err) {
     syncError.textContent = `Couldn't sync from Square: ${err.message}`;
@@ -276,15 +287,34 @@ syncOrdersBtn.addEventListener('click', async () => {
   }
 });
 
-financeTableBody.addEventListener('change', (e) => {
+financeTableBody.addEventListener('change', async (e) => {
   const field = e.target.dataset.field;
   if (!field) return;
-  const index = Number(e.target.closest('tr').dataset.index);
-  const row = financeRows[index];
+  const id = Number(e.target.closest('tr').dataset.id);
+  const row = financeRows.find((r) => r.id === id);
   if (!row) return;
 
-  row[field] = field === 'discount' ? Number(e.target.value) : parseFloat(e.target.value) || 0;
+  const value = Number(e.target.value);
+  const previousValue = row[field];
+  row[field] = value;
   renderFinances();
+
+  try {
+    const response = await fetch('/api/finance-rows', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ id, field, value }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+  } catch (err) {
+    row[field] = previousValue;
+    renderFinances();
+    syncError.textContent = `Couldn't save change: ${err.message}`;
+    syncError.style.display = 'block';
+  }
 });
 
 function renderFinances() {
@@ -296,7 +326,7 @@ function renderFinances() {
   let creditBalance = 0;
   let shopperFeeSum = 0;
 
-  financeRows.forEach((row, index) => {
+  financeRows.forEach((row) => {
     orderIds.add(row.orderId);
 
     const total = row.itemPrice + row.shopperFee + row.shipping;
@@ -307,7 +337,7 @@ function renderFinances() {
     shopperFeeSum += row.shopperFee;
 
     const tr = document.createElement('tr');
-    tr.dataset.index = index;
+    tr.dataset.id = row.id;
     tr.innerHTML = `
       <td>${escapeHtml(row.customer)}</td>
       <td>${escapeHtml(row.item)}</td>
@@ -338,4 +368,4 @@ function renderFinances() {
 }
 
 render();
-renderFinances();
+loadFinanceRows();

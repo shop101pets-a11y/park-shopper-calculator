@@ -1,4 +1,5 @@
 const { SQUARE_VERSION, getSquareConfig } = require('./_square');
+const { getSql, ensureSchema, rowToJson } = require('./_db');
 
 const SHOPPER_FEE_SUFFIX = ' - shopper fee';
 const OUR_SOURCE_TAG = 'park-shopper-app';
@@ -50,16 +51,28 @@ module.exports = async (req, res) => {
       (order) => order.metadata && order.metadata.source === OUR_SOURCE_TAG
     );
 
-    const rows = orders.flatMap(parseOrderIntoRows);
+    const freshRows = orders.flatMap(parseOrderIntoRows);
+
+    const sql = getSql();
+    await ensureSchema(sql);
+
+    for (const row of freshRows) {
+      await sql`
+        INSERT INTO finance_rows (order_id, customer, item, quantity, item_price, shopper_fee, shipping)
+        VALUES (${row.orderId}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.shipping})
+        ON CONFLICT (order_id, item) DO NOTHING
+      `;
+    }
+
+    const persisted = await sql`SELECT * FROM finance_rows ORDER BY created_at DESC, id DESC`;
 
     res.status(200).json({
-      rows,
+      rows: persisted.map(rowToJson),
       _debug: {
         totalCompletedOrders: allOrders.length,
         taggedOrders: orders.length,
-        sampleOrder: allOrders[0]
-          ? { id: allOrders[0].id, metadata: allOrders[0].metadata || null, state: allOrders[0].state }
-          : null,
+        rowsFoundThisSync: freshRows.length,
+        rowsPersisted: persisted.length,
       },
     });
   } catch (err) {
