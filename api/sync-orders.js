@@ -58,9 +58,9 @@ module.exports = async (req, res) => {
 
     for (const row of freshRows) {
       await sql`
-        INSERT INTO finance_rows (order_id, customer, item, quantity, item_price, shopper_fee, shipping)
-        VALUES (${row.orderId}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.shipping})
-        ON CONFLICT (order_id, item) DO NOTHING
+        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, shipping)
+        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.shipping})
+        ON CONFLICT (order_id, line_uid) DO NOTHING
       `;
     }
 
@@ -88,35 +88,37 @@ function parseOrderIntoRows(order) {
     .filter((sc) => sc.name === 'Shipping')
     .reduce((sum, sc) => sum + (sc.total_money?.amount || 0), 0);
 
-  // Item lines and their "<name> - shopper fee" lines are adjacent, in the
-  // order this app created them in (see api/create-payment-link.js).
-  const itemLines = [];
-  const feeByItemName = {};
-  for (const line of lineItems) {
-    if (line.name && line.name.endsWith(SHOPPER_FEE_SUFFIX)) {
-      const itemName = line.name.slice(0, -SHOPPER_FEE_SUFFIX.length);
-      feeByItemName[itemName] = (feeByItemName[itemName] || 0) + (line.base_price_money?.amount || 0);
-    } else {
-      itemLines.push(line);
-    }
+  // Item lines and their "<name> - shopper fee" lines are adjacent pairs, in
+  // the order this app created them in (see api/create-payment-link.js).
+  // Paired by position rather than by name, since an order can legitimately
+  // contain multiple line items with the same name (e.g. the same item
+  // added separately more than once) - matching by name would conflate them.
+  const pairs = [];
+  for (let i = 0; i < lineItems.length; i++) {
+    const line = lineItems[i];
+    if (line.name && line.name.endsWith(SHOPPER_FEE_SUFFIX)) continue;
+    const next = lineItems[i + 1];
+    const feeLine = next && next.name === `${line.name}${SHOPPER_FEE_SUFFIX}` ? next : null;
+    pairs.push({ itemLine: line, feeCents: feeLine?.base_price_money?.amount || 0 });
   }
 
-  const itemTotalCents = itemLines.reduce((sum, line) => sum + (line.total_money?.amount || 0), 0);
+  const itemTotalCents = pairs.reduce((sum, p) => sum + (p.itemLine.total_money?.amount || 0), 0);
 
-  return itemLines.map((line) => {
-    const lineTotalCents = line.total_money?.amount || 0;
+  return pairs.map(({ itemLine, feeCents }) => {
+    const lineTotalCents = itemLine.total_money?.amount || 0;
     const shippingShareCents = itemTotalCents > 0
       ? Math.round((lineTotalCents / itemTotalCents) * shippingCents)
       : 0;
 
     return {
       orderId: order.id,
+      lineUid: itemLine.uid,
       customer,
-      item: line.name,
-      quantity: Number(line.quantity) || 1,
+      item: itemLine.name,
+      quantity: Number(itemLine.quantity) || 1,
       itemPrice: lineTotalCents / 100,
       shipping: shippingShareCents / 100,
-      shopperFee: (feeByItemName[line.name] || 0) / 100,
+      shopperFee: feeCents / 100,
     };
   });
 }
