@@ -8,7 +8,7 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     if (req.method === 'GET') {
-      const rows = await sql`SELECT * FROM finance_rows ORDER BY created_at DESC, id DESC`;
+      const rows = await sql`SELECT * FROM finance_rows ORDER BY order_created_at DESC NULLS LAST, id DESC`;
       res.status(200).json({ rows: rows.map(rowToJson) });
       return;
     }

@@ -63,13 +63,15 @@ module.exports = async (req, res) => {
 
     for (const row of freshRows) {
       await sql`
-        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping)
-        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping})
-        ON CONFLICT (order_id, line_uid) DO NOTHING
+        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping, order_created_at)
+        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.orderCreatedAt})
+        ON CONFLICT (order_id, line_uid) DO UPDATE
+          SET order_created_at = EXCLUDED.order_created_at
+          WHERE finance_rows.order_created_at IS NULL
       `;
     }
 
-    const persisted = await sql`SELECT * FROM finance_rows ORDER BY created_at DESC, id DESC`;
+    const persisted = await sql`SELECT * FROM finance_rows ORDER BY order_created_at DESC NULLS LAST, id DESC`;
 
     const untagged = paidOrders.filter((o) => !(o.metadata && o.metadata.source === OUR_SOURCE_TAG));
 
@@ -130,6 +132,7 @@ function parseOrderIntoRows(order) {
     return {
       orderId: order.id,
       lineUid: itemLine.uid,
+      orderCreatedAt: order.created_at,
       customer,
       item: itemLine.name,
       quantity: Number(itemLine.quantity) || 1,

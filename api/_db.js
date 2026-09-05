@@ -41,6 +41,12 @@ async function ensureSchema(sql) {
   await sql`CREATE UNIQUE INDEX IF NOT EXISTS finance_rows_order_line_uid_key ON finance_rows (order_id, line_uid)`;
 
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tip NUMERIC NOT NULL DEFAULT 0`;
+
+  // created_at was "when this row was saved to our database," not the
+  // actual order date - meaningless for sorting since it depends on when a
+  // sync happened to run, not when the customer ordered. order_created_at
+  // holds the real date; existing rows get backfilled by sync-orders.js.
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS order_created_at TIMESTAMPTZ`;
 }
 
 function rowToJson(row) {
@@ -56,6 +62,7 @@ function rowToJson(row) {
     shipping: Number(row.shipping),
     discount: Number(row.discount),
     shippingCost: Number(row.shipping_cost),
+    orderDate: row.order_created_at,
   };
 }
 
