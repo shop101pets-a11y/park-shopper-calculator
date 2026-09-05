@@ -66,6 +66,8 @@ module.exports = async (req, res) => {
 
     const persisted = await sql`SELECT * FROM finance_rows ORDER BY created_at DESC, id DESC`;
 
+    const untagged = allOrders.filter((o) => !(o.metadata && o.metadata.source === OUR_SOURCE_TAG));
+
     res.status(200).json({
       rows: persisted.map(rowToJson),
       _debug: {
@@ -73,6 +75,12 @@ module.exports = async (req, res) => {
         taggedOrders: orders.length,
         rowsFoundThisSync: freshRows.length,
         rowsPersisted: persisted.length,
+        untaggedSample: untagged.slice(0, 10).map((o) => ({
+          id: o.id,
+          createdAt: o.created_at,
+          metadata: o.metadata || null,
+          lineItemNames: (o.line_items || []).map((li) => li.name),
+        })),
       },
     });
   } catch (err) {
