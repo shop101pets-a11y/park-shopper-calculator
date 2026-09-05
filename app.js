@@ -2,7 +2,7 @@ const TAX_RATE = 0.065;
 const FEE_LOW = 3;
 const FEE_HIGH = 5;
 const FEE_THRESHOLD = 25;
-const SHIPPING_FEES = { light: 7.75, normal: 8.35, heavy: 9.86 };
+const SHIPPING_FEES = { light: 7.75, normal: 8.35, heavy: 9.86, none: 0 };
 
 /**
  * Core pricing formulas.

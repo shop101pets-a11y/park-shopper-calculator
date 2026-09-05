@@ -5,7 +5,7 @@ const TAX_RATE = '6.5';
 const FEE_LOW_CENTS = 300;
 const FEE_HIGH_CENTS = 500;
 const FEE_THRESHOLD_CENTS = 2500;
-const SHIPPING_FEE_CENTS = { light: 775, normal: 835, heavy: 986 };
+const SHIPPING_FEE_CENTS = { light: 775, normal: 835, heavy: 986, none: 0 };
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -21,8 +21,8 @@ module.exports = async (req, res) => {
   }
 
   const shippingCents = SHIPPING_FEE_CENTS[packageWeight];
-  if (!shippingCents) {
-    res.status(400).json({ error: 'packageWeight must be one of: light, normal, heavy' });
+  if (shippingCents === undefined) {
+    res.status(400).json({ error: 'packageWeight must be one of: light, normal, heavy, none' });
     return;
   }
 
@@ -69,10 +69,12 @@ module.exports = async (req, res) => {
     },
     checkout_options: {
       ask_for_shipping_address: true,
-      shipping_fee: {
-        name: 'Shipping',
-        charge: { amount: shippingCents, currency: 'USD' },
-      },
+      ...(shippingCents > 0 && {
+        shipping_fee: {
+          name: 'Shipping',
+          charge: { amount: shippingCents, currency: 'USD' },
+        },
+      }),
       // Percentages/custom-amount behavior isn't controllable per-request -
       // it's an account-wide setting (Square Dashboard > Payments & orders >
       // Payment links > Settings > General > Tip options).
