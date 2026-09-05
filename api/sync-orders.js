@@ -19,7 +19,7 @@ module.exports = async (req, res) => {
   const searchBody = {
     location_ids: [locationId],
     query: {
-      filter: { state_filter: { states: ['COMPLETED'] } },
+      filter: { state_filter: { states: ['OPEN', 'COMPLETED'] } },
       sort: { sort_field: 'CREATED_AT', sort_order: 'DESC' },
     },
     limit: 100,
@@ -47,7 +47,12 @@ module.exports = async (req, res) => {
     }
 
     const allOrders = data.orders || [];
-    const orders = allOrders.filter(
+    // Orders stay OPEN (not COMPLETED) until every fulfillment is complete -
+    // for us that means "marked as shipped," which can be days after payment.
+    // Paid-in-full is what actually matters here, so check the balance
+    // directly instead of relying on order state.
+    const paidOrders = allOrders.filter((order) => (order.net_amount_due_money?.amount || 0) === 0);
+    const orders = paidOrders.filter(
       (order) => order.metadata && order.metadata.source === OUR_SOURCE_TAG
     );
 
@@ -66,12 +71,13 @@ module.exports = async (req, res) => {
 
     const persisted = await sql`SELECT * FROM finance_rows ORDER BY created_at DESC, id DESC`;
 
-    const untagged = allOrders.filter((o) => !(o.metadata && o.metadata.source === OUR_SOURCE_TAG));
+    const untagged = paidOrders.filter((o) => !(o.metadata && o.metadata.source === OUR_SOURCE_TAG));
 
     res.status(200).json({
       rows: persisted.map(rowToJson),
       _debug: {
-        totalCompletedOrders: allOrders.length,
+        totalOrdersFetched: allOrders.length,
+        paidOrders: paidOrders.length,
         taggedOrders: orders.length,
         rowsFoundThisSync: freshRows.length,
         rowsPersisted: persisted.length,
