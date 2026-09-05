@@ -247,6 +247,7 @@ const statCredit = document.getElementById('stat-credit');
 const statDebit = document.getElementById('stat-debit');
 const statEarnings = document.getElementById('stat-earnings');
 const statShopperFee = document.getElementById('stat-shopper-fee');
+const statTips = document.getElementById('stat-tips');
 
 async function loadFinanceRows() {
   try {
@@ -325,6 +326,7 @@ function renderFinances() {
   let debitBalance = 0;
   let creditBalance = 0;
   let shopperFeeSum = 0;
+  let tipSum = 0;
 
   financeRows.forEach((row) => {
     orderIds.add(row.orderId);
@@ -335,6 +337,7 @@ function renderFinances() {
     debitBalance += total;
     creditBalance += totalCost;
     shopperFeeSum += row.shopperFee;
+    tipSum += row.tip;
 
     const tr = document.createElement('tr');
     tr.dataset.id = row.id;
@@ -366,6 +369,7 @@ function renderFinances() {
   statDebit.textContent = formatMoney(Math.round(debitBalance * 100) / 100);
   statEarnings.textContent = formatMoney(Math.round((debitBalance - creditBalance) * 100) / 100);
   statShopperFee.textContent = formatMoney(Math.round(shopperFeeSum * 100) / 100);
+  statTips.textContent = formatMoney(Math.round(tipSum * 100) / 100);
 }
 
 render();
