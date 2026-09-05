@@ -57,8 +57,8 @@ module.exports = async (req, res) => {
     });
     lineItems.push({
       name: `${name} - shopper fee`,
-      quantity: '1',
-      base_price_money: { amount: feeCentsPerUnit * quantity, currency: 'USD' },
+      quantity: String(quantity),
+      base_price_money: { amount: feeCentsPerUnit, currency: 'USD' },
     });
   }
 

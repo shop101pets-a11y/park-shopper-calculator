@@ -117,7 +117,10 @@ function parseOrderIntoRows(order) {
     if (line.name && line.name.endsWith(SHOPPER_FEE_SUFFIX)) continue;
     const next = lineItems[i + 1];
     const feeLine = next && next.name === `${line.name}${SHOPPER_FEE_SUFFIX}` ? next : null;
-    pairs.push({ itemLine: line, feeCents: feeLine?.base_price_money?.amount || 0 });
+    // The fee line's own quantity mirrors the item's, so its total_money
+    // (not base_price_money, which is now just the per-unit fee) is the
+    // full shopper fee for this line.
+    pairs.push({ itemLine: line, feeCents: feeLine?.total_money?.amount || 0 });
   }
 
   const itemTotalCents = pairs.reduce((sum, p) => sum + (p.itemLine.total_money?.amount || 0), 0);
