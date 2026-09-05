@@ -5,18 +5,28 @@ const FEE_THRESHOLD = 25;
 const SHIPPING_FEES = { light: 7.75, normal: 8.35, heavy: 9.86, none: 0 };
 
 /**
- * Core pricing formulas.
+ * Core pricing formulas. Tax applies to the extended price (unit price x
+ * quantity); the shopper fee is per unit (one shopping trip per item), so
+ * its $25 threshold checks the unit price, then scales by quantity.
  */
-function calcTax(price) {
-  return Math.round(price * TAX_RATE * 100) / 100;
+function calcExtendedPrice(price, quantity) {
+  return price * quantity;
 }
 
-function calcShopperFee(price) {
+function calcTax(price, quantity) {
+  return Math.round(calcExtendedPrice(price, quantity) * TAX_RATE * 100) / 100;
+}
+
+function calcShopperFeePerUnit(price) {
   return price < FEE_THRESHOLD ? FEE_LOW : FEE_HIGH;
 }
 
-function calcItemTotal(price) {
-  return Math.round((price + calcTax(price) + calcShopperFee(price)) * 100) / 100;
+function calcShopperFee(price, quantity) {
+  return calcShopperFeePerUnit(price) * quantity;
+}
+
+function calcItemTotal(price, quantity) {
+  return Math.round((calcExtendedPrice(price, quantity) + calcTax(price, quantity) + calcShopperFee(price, quantity)) * 100) / 100;
 }
 
 function formatMoney(n) {
@@ -28,6 +38,7 @@ let items = [];
 const form = document.getElementById('item-form');
 const nameInput = document.getElementById('item-name');
 const priceInput = document.getElementById('item-price');
+const quantityInput = document.getElementById('item-quantity');
 const itemsList = document.getElementById('items-list');
 const emptyState = document.getElementById('empty-state');
 const summaryOutput = document.getElementById('summary-output');
@@ -48,11 +59,13 @@ form.addEventListener('submit', (e) => {
   e.preventDefault();
   const name = nameInput.value.trim();
   const price = parseFloat(priceInput.value);
-  if (!name || isNaN(price) || price < 0) return;
+  const quantity = parseInt(quantityInput.value, 10);
+  if (!name || isNaN(price) || price < 0 || !Number.isInteger(quantity) || quantity < 1) return;
 
-  items.push({ id: Date.now(), name, price });
+  items.push({ id: Date.now(), name, price, quantity });
   nameInput.value = '';
   priceInput.value = '';
+  quantityInput.value = '1';
   nameInput.focus();
   render();
 });
@@ -107,7 +120,7 @@ createLinkBtn.addEventListener('click', async () => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: items.map((item) => ({ name: item.name, price: item.price })),
+        items: items.map((item) => ({ name: item.name, price: item.price, quantity: item.quantity })),
         packageWeight: getSelectedWeight(),
       }),
     });
@@ -150,16 +163,17 @@ function render() {
   createLinkBtn.disabled = !items.length;
 
   items.forEach((item) => {
-    const tax = calcTax(item.price);
-    const fee = calcShopperFee(item.price);
-    const total = calcItemTotal(item.price);
+    const tax = calcTax(item.price, item.quantity);
+    const fee = calcShopperFee(item.price, item.quantity);
+    const total = calcItemTotal(item.price, item.quantity);
+    const qtySuffix = item.quantity > 1 ? ` x${item.quantity}` : '';
 
     const li = document.createElement('li');
     li.className = 'item-row';
     li.innerHTML = `
       <div class="item-info">
-        <span class="item-name">${escapeHtml(item.name)}</span>
-        <span class="item-detail">${formatMoney(item.price)} + ${formatMoney(tax)} tax + ${formatMoney(fee)} fee</span>
+        <span class="item-name">${escapeHtml(item.name)}${qtySuffix}</span>
+        <span class="item-detail">${formatMoney(item.price)}${qtySuffix} + ${formatMoney(tax)} tax + ${formatMoney(fee)} fee</span>
       </div>
       <span class="item-total">${formatMoney(total)}</span>
       <button class="btn-remove" data-id="${item.id}" title="Remove" type="button">&times;</button>
@@ -176,11 +190,13 @@ function buildSummary() {
   if (!items.length) return '';
 
   const blocks = items.map((item) => {
-    const tax = calcTax(item.price);
-    const fee = calcShopperFee(item.price);
-    const total = calcItemTotal(item.price);
+    const extended = calcExtendedPrice(item.price, item.quantity);
+    const tax = calcTax(item.price, item.quantity);
+    const fee = calcShopperFee(item.price, item.quantity);
+    const total = calcItemTotal(item.price, item.quantity);
+    const qtySuffix = item.quantity > 1 ? ` x${item.quantity}` : '';
     return [
-      `${item.name} - ${formatMoney(item.price)} (+${formatMoney(tax)} tax)`,
+      `${item.name}${qtySuffix} - ${formatMoney(extended)} (+${formatMoney(tax)} tax)`,
       `shopper fee - ${formatMoney(fee)}`,
       `total ${formatMoney(total)}`,
     ].join('\n');
@@ -188,7 +204,7 @@ function buildSummary() {
 
   const weight = getSelectedWeight();
   const shippingFee = SHIPPING_FEES[weight];
-  const itemsTotal = items.reduce((sum, item) => sum + calcItemTotal(item.price), 0);
+  const itemsTotal = items.reduce((sum, item) => sum + calcItemTotal(item.price, item.quantity), 0);
   const orderTotal = Math.round((itemsTotal + shippingFee) * 100) / 100;
 
   let text = blocks.join('\n\n');

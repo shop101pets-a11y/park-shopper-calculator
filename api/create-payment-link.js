@@ -38,24 +38,27 @@ module.exports = async (req, res) => {
   for (const item of items) {
     const name = typeof item.name === 'string' ? item.name.trim() : '';
     const price = Number(item.price);
-    if (!name || !Number.isFinite(price) || price < 0) {
+    const quantity = Number.isInteger(item.quantity) ? item.quantity : parseInt(item.quantity, 10) || 1;
+    if (!name || !Number.isFinite(price) || price < 0 || !Number.isInteger(quantity) || quantity < 1) {
       res.status(400).json({ error: `Invalid item: ${JSON.stringify(item)}` });
       return;
     }
 
+    // Fee is per unit (one shopping trip per item), so its $25 threshold
+    // checks the unit price, then scales by quantity - same math as app.js.
     const priceCents = Math.round(price * 100);
-    const feeCents = priceCents < FEE_THRESHOLD_CENTS ? FEE_LOW_CENTS : FEE_HIGH_CENTS;
+    const feeCentsPerUnit = priceCents < FEE_THRESHOLD_CENTS ? FEE_LOW_CENTS : FEE_HIGH_CENTS;
 
     lineItems.push({
       name,
-      quantity: '1',
+      quantity: String(quantity),
       base_price_money: { amount: priceCents, currency: 'USD' },
       applied_taxes: [{ tax_uid: taxUid }],
     });
     lineItems.push({
       name: `${name} - shopper fee`,
       quantity: '1',
-      base_price_money: { amount: feeCents, currency: 'USD' },
+      base_price_money: { amount: feeCentsPerUnit * quantity, currency: 'USD' },
     });
   }
 

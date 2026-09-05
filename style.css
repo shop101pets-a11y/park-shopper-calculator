@@ -45,7 +45,7 @@ header h1 {
 
 .item-form {
   display: grid;
-  grid-template-columns: 2fr 1fr auto;
+  grid-template-columns: 2fr 1fr 70px auto;
   gap: 10px;
   align-items: end;
   background: var(--card);
