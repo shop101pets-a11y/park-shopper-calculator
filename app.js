@@ -304,6 +304,113 @@ syncOrdersBtn.addEventListener('click', async () => {
   }
 });
 
+// --- Pirate Ship shipping cost import ---
+const shippingFileInput = document.getElementById('shipping-file-input');
+const previewImportBtn = document.getElementById('preview-import-btn');
+const importPreview = document.getElementById('import-preview');
+const importMatchesEl = document.getElementById('import-matches');
+const importUnmatchedEl = document.getElementById('import-unmatched');
+const confirmImportBtn = document.getElementById('confirm-import-btn');
+const importError = document.getElementById('import-error');
+
+let pendingImportMatches = [];
+
+function readFileAsBase64(file) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Could not read the file'));
+    reader.readAsDataURL(file);
+  });
+}
+
+shippingFileInput.addEventListener('change', () => {
+  previewImportBtn.disabled = !shippingFileInput.files.length;
+  importPreview.style.display = 'none';
+  importError.style.display = 'none';
+});
+
+previewImportBtn.addEventListener('click', async () => {
+  const file = shippingFileInput.files[0];
+  if (!file) return;
+
+  importError.style.display = 'none';
+  previewImportBtn.disabled = true;
+  previewImportBtn.textContent = 'Reading file...';
+
+  try {
+    const fileBase64 = await readFileAsBase64(file);
+    const response = await fetch('/api/match-shipping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'preview', fileBase64 }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+
+    pendingImportMatches = data.matches;
+    renderImportPreview(data.matches, data.unmatched);
+  } catch (err) {
+    importError.textContent = `Couldn't preview import: ${err.message}`;
+    importError.style.display = 'block';
+  } finally {
+    previewImportBtn.disabled = false;
+    previewImportBtn.textContent = 'Preview import';
+  }
+});
+
+confirmImportBtn.addEventListener('click', async () => {
+  if (!pendingImportMatches.length) return;
+
+  importError.style.display = 'none';
+  confirmImportBtn.disabled = true;
+  confirmImportBtn.textContent = 'Applying...';
+
+  try {
+    const response = await fetch('/api/match-shipping', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ mode: 'apply', matches: pendingImportMatches }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+
+    importPreview.style.display = 'none';
+    shippingFileInput.value = '';
+    previewImportBtn.disabled = true;
+    pendingImportMatches = [];
+    await loadFinanceRows();
+  } catch (err) {
+    importError.textContent = `Couldn't apply import: ${err.message}`;
+    importError.style.display = 'block';
+  } finally {
+    confirmImportBtn.disabled = false;
+    confirmImportBtn.textContent = 'Confirm import';
+  }
+});
+
+function renderImportPreview(matches, unmatched) {
+  importMatchesEl.innerHTML = matches.map((m) => `
+    <div class="import-match${m.ambiguous ? ' ambiguous' : ''}">
+      <div class="import-match-title">${escapeHtml(m.recipient)} → ${escapeHtml(m.matchedCustomer)} - ${formatMoney(m.cost)}</div>
+      <div class="import-match-detail">
+        ${m.ambiguous ? 'Multiple orders found for this name, picked closest by date. ' : ''}
+        Split across: ${m.rows.map((r) => `${escapeHtml(r.item)} (${formatMoney(r.shippingCost)})`).join(', ')}
+      </div>
+    </div>
+  `).join('');
+
+  importUnmatchedEl.innerHTML = unmatched.map((u) => `
+    <div class="import-unmatched-item">${escapeHtml(u.recipient)} - ${formatMoney(u.cost)}: ${escapeHtml(u.reason)}</div>
+  `).join('');
+
+  importPreview.style.display = matches.length || unmatched.length ? 'flex' : 'none';
+}
+
 financeTableBody.addEventListener('change', async (e) => {
   const field = e.target.dataset.field;
   if (!field) return;

@@ -352,6 +352,71 @@ header h1 {
   font-weight: 700;
 }
 
+.import-section {
+  background: var(--card);
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  padding: 16px;
+  margin-bottom: 20px;
+}
+
+.import-section h2 {
+  margin: 0 0 6px;
+  font-size: 1rem;
+}
+
+.import-hint {
+  margin: 0 0 12px;
+  color: var(--muted);
+  font-size: 0.82rem;
+}
+
+.import-controls {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.import-preview {
+  margin-top: 14px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.import-match {
+  padding: 10px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  font-size: 0.85rem;
+}
+
+.import-match.ambiguous {
+  border-color: #d97706;
+  background: #fffbeb;
+}
+
+.import-match-title {
+  font-weight: 600;
+  margin-bottom: 4px;
+}
+
+.import-match-detail {
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.import-unmatched-item {
+  padding: 8px 12px;
+  border: 1px solid var(--danger);
+  background: #fef2f2;
+  border-radius: 8px;
+  font-size: 0.85rem;
+  color: var(--danger);
+  margin-bottom: 6px;
+}
+
 .finance-table-section {
   background: var(--card);
   border: 1px solid var(--border);

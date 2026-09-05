@@ -2,6 +2,7 @@
   "name": "park-shopper-calculator",
   "private": true,
   "dependencies": {
-    "@neondatabase/serverless": "^0.10.4"
+    "@neondatabase/serverless": "^0.10.4",
+    "xlsx": "^0.18.5"
   }
 }

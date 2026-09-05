@@ -112,6 +112,21 @@
         </div>
       </section>
 
+      <section class="import-section">
+        <h2>Import shipping costs (Pirate Ship)</h2>
+        <p class="import-hint">Upload a Pirate Ship shipment export (.xlsx or .csv). Matches by recipient name to your synced orders - review before confirming.</p>
+        <div class="import-controls">
+          <input type="file" id="shipping-file-input" accept=".xlsx,.csv">
+          <button id="preview-import-btn" class="btn-add" type="button" disabled>Preview import</button>
+        </div>
+        <div id="import-preview" class="import-preview" style="display:none;">
+          <div id="import-matches"></div>
+          <div id="import-unmatched"></div>
+          <button id="confirm-import-btn" class="btn-add" type="button">Confirm import</button>
+        </div>
+        <p id="import-error" class="payment-link-error" style="display:none;"></p>
+      </section>
+
       <section class="finance-table-section">
         <div class="finance-table-header">
           <h2>Orders</h2>
