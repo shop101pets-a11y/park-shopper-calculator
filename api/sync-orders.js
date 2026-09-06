@@ -56,18 +56,22 @@ module.exports = async (req, res) => {
       (order) => order.metadata && order.metadata.source === OUR_SOURCE_TAG
     );
 
-    const freshRows = orders.flatMap(parseOrderIntoRows);
+    const squareFeeCentsByOrderId = await fetchSquareFeesByOrderId(
+      baseUrl, accessToken, locationId, new Set(orders.map((o) => o.id))
+    );
+
+    const freshRows = orders.flatMap((order) => parseOrderIntoRows(order, squareFeeCentsByOrderId[order.id] || 0));
 
     const sql = getSql();
     await ensureSchema(sql);
 
     for (const row of freshRows) {
       await sql`
-        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping, order_created_at)
-        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.orderCreatedAt})
+        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping, square_fee, order_created_at)
+        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.squareFee}, ${row.orderCreatedAt})
         ON CONFLICT (order_id, line_uid) DO UPDATE
-          SET order_created_at = EXCLUDED.order_created_at
-          WHERE finance_rows.order_created_at IS NULL
+          SET square_fee = EXCLUDED.square_fee,
+              order_created_at = COALESCE(finance_rows.order_created_at, EXCLUDED.order_created_at)
       `;
     }
 
@@ -96,7 +100,34 @@ module.exports = async (req, res) => {
   }
 };
 
-function parseOrderIntoRows(order) {
+// Square's processing fee lives on the Payment, not the Order, so it takes a
+// separate call. Payments carry an order_id, letting us sum fees per order
+// (a split tender could mean more than one payment per order).
+async function fetchSquareFeesByOrderId(baseUrl, accessToken, locationId, orderIds) {
+  const feesByOrderId = {};
+  if (orderIds.size === 0) return feesByOrderId;
+
+  const params = new URLSearchParams({ location_id: locationId, sort_order: 'DESC', limit: '100' });
+  const response = await fetch(`${baseUrl}/v2/payments?${params}`, {
+    headers: {
+      'Authorization': `Bearer ${accessToken}`,
+      'Square-Version': SQUARE_VERSION,
+    },
+  });
+
+  if (!response.ok) return feesByOrderId;
+
+  const data = await response.json();
+  for (const payment of data.payments || []) {
+    if (!payment.order_id || !orderIds.has(payment.order_id)) continue;
+    const feeCents = (payment.processing_fee || []).reduce((sum, fee) => sum + (fee.amount_money?.amount || 0), 0);
+    feesByOrderId[payment.order_id] = (feesByOrderId[payment.order_id] || 0) + feeCents;
+  }
+
+  return feesByOrderId;
+}
+
+function parseOrderIntoRows(order, squareFeeCents) {
   const lineItems = order.line_items || [];
   const customer = order.fulfillments?.[0]?.shipment_details?.recipient?.display_name || 'Unknown';
 
@@ -142,6 +173,7 @@ function parseOrderIntoRows(order) {
       itemPrice: lineTotalCents / 100,
       shipping: shareOf(lineTotalCents, shippingCents) / 100,
       tip: shareOf(lineTotalCents, tipCents) / 100,
+      squareFee: shareOf(lineTotalCents, squareFeeCents) / 100,
       shopperFee: feeCents / 100,
     };
   });

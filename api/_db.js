@@ -47,6 +47,12 @@ async function ensureSchema(sql) {
   // sync happened to run, not when the customer ordered. order_created_at
   // holds the real date; existing rows get backfilled by sync-orders.js.
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS order_created_at TIMESTAMPTZ`;
+
+  // Square's own processing fee on the payment, split across the order's
+  // line items the same way shipping/tip are. Unlike shipping_cost (a
+  // manual entry), this is synced data - refreshed on every sync rather
+  // than only backfilled when missing.
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS square_fee NUMERIC NOT NULL DEFAULT 0`;
 }
 
 function rowToJson(row) {
@@ -62,6 +68,7 @@ function rowToJson(row) {
     shipping: Number(row.shipping),
     discount: Number(row.discount),
     shippingCost: Number(row.shipping_cost),
+    squareFee: Number(row.square_fee),
     orderDate: row.order_created_at,
   };
 }

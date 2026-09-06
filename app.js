@@ -456,7 +456,7 @@ function renderFinances() {
 
     const total = row.itemPrice + row.shopperFee + row.tip + row.shipping;
     const cost = calcCost(row);
-    const totalCost = cost + row.shippingCost;
+    const totalCost = cost + row.shippingCost + row.squareFee;
     debitBalance += total;
     creditBalance += totalCost;
     shopperFeeSum += row.shopperFee;
@@ -481,6 +481,7 @@ function renderFinances() {
       </td>
       <td>${formatMoney(cost)}</td>
       <td><input type="number" step="0.01" min="0" data-field="shippingCost" value="${row.shippingCost}"></td>
+      <td>${formatMoney(row.squareFee)}</td>
       <td>${formatMoney(totalCost)}</td>
       <td>${formatMoney(total - totalCost)}</td>
     `;
