@@ -72,12 +72,13 @@ module.exports = async (req, res) => {
     },
     checkout_options: {
       ask_for_shipping_address: true,
-      ...(shippingCents > 0 && {
-        shipping_fee: {
-          name: 'Shipping',
-          charge: { amount: shippingCents, currency: 'USD' },
-        },
-      }),
+      // Always send a flat shipping_fee, even at $0 - omitting it entirely
+      // let Square fall back to computing/offering its own shipping method
+      // and rate (e.g. a real carrier rate) instead of charging nothing.
+      shipping_fee: {
+        name: 'Shipping',
+        charge: { amount: shippingCents, currency: 'USD' },
+      },
       // Percentages/custom-amount behavior isn't controllable per-request -
       // it's an account-wide setting (Square Dashboard > Payments & orders >
       // Payment links > Settings > General > Tip options).
