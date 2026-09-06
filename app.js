@@ -503,6 +503,7 @@ function renderFinances() {
 // --- Tracking ---
 const trackingTableBody = document.getElementById('tracking-table-body');
 const trackingEmptyState = document.getElementById('tracking-empty-state');
+const finishPackingBtn = document.getElementById('finish-packing-btn');
 
 trackingTableBody.addEventListener('click', async (e) => {
   const btn = e.target.closest('.btn-copy-tracking');
@@ -514,6 +515,39 @@ trackingTableBody.addEventListener('click', async (e) => {
   setTimeout(() => {
     btn.textContent = original;
   }, 1500);
+});
+
+trackingTableBody.addEventListener('change', (e) => {
+  const checkbox = e.target.closest('.packed-checkbox');
+  if (!checkbox) return;
+  checkbox.closest('tr').classList.toggle('packed-row', checkbox.checked);
+});
+
+finishPackingBtn.addEventListener('click', async () => {
+  const checkedRows = [...trackingTableBody.querySelectorAll('.packed-checkbox:checked')];
+  if (!checkedRows.length) return;
+
+  if (!confirm(`Finish packing ${checkedRows.length} order${checkedRows.length > 1 ? 's' : ''}? They'll be removed from this list (Finances keeps all their data).`)) {
+    return;
+  }
+
+  const orderIds = [...new Set(checkedRows.flatMap((cb) => JSON.parse(cb.dataset.orderIds)))];
+
+  try {
+    const response = await fetch('/api/tracking', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    await loadTracking();
+  } catch (err) {
+    trackingEmptyState.textContent = `Couldn't finish packing: ${err.message}`;
+    trackingEmptyState.style.display = 'block';
+  }
 });
 
 async function loadTracking() {
@@ -550,6 +584,7 @@ function renderTracking(orders) {
       : '<span class="empty-state" style="padding:0;">Not yet shipped</span>';
 
     tr.innerHTML = `
+      <td><input type="checkbox" class="packed-checkbox" data-order-ids='${JSON.stringify(order.orderIds)}'></td>
       <td>${escapeHtml(order.customer)}</td>
       <td>${escapeHtml(order.items.join(', '))}</td>
       <td>${escapeHtml(order.carrier || '')}</td>

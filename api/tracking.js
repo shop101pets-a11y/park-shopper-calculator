@@ -10,16 +10,33 @@ function dayKey(dateStr) {
 }
 
 module.exports = async (req, res) => {
-  if (req.method !== 'GET') {
-    res.status(405).json({ error: 'Method not allowed' });
-    return;
-  }
-
   try {
     const sql = getSql();
     await ensureSchema(sql);
 
-    const rows = await sql`SELECT * FROM finance_rows ORDER BY order_created_at DESC NULLS LAST, id DESC`;
+    if (req.method === 'POST') {
+      const { orderIds } = req.body || {};
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        res.status(400).json({ error: 'orderIds is required and must be a non-empty array' });
+        return;
+      }
+      for (const orderId of orderIds) {
+        await sql`UPDATE finance_rows SET packed = true WHERE order_id = ${orderId}`;
+      }
+      res.status(200).json({ updated: orderIds.length });
+      return;
+    }
+
+    if (req.method !== 'GET') {
+      res.status(405).json({ error: 'Method not allowed' });
+      return;
+    }
+
+    const rows = await sql`
+      SELECT * FROM finance_rows
+      WHERE packed = false
+      ORDER BY order_created_at DESC NULLS LAST, id DESC
+    `;
 
     // Same customer, same day, one shipment - merge into a single row so a
     // multi-order combined shipment doesn't show as duplicate tracking rows.
@@ -35,6 +52,7 @@ module.exports = async (req, res) => {
           customer: row.customer,
           orderDate: row.order_created_at,
           items: [],
+          orderIds: new Set(),
           trackingNumbers: new Set(),
           carriers: new Set(),
           trackingUrls: new Set(),
@@ -43,6 +61,7 @@ module.exports = async (req, res) => {
 
       const group = groups.get(key);
       group.items.push(row.item);
+      group.orderIds.add(row.order_id);
       if (row.tracking_number) group.trackingNumbers.add(row.tracking_number);
       if (row.carrier) group.carriers.add(row.carrier);
       if (row.tracking_url) group.trackingUrls.add(row.tracking_url);
@@ -55,6 +74,7 @@ module.exports = async (req, res) => {
       .map((g) => {
         const trackingNumbers = [...g.trackingNumbers];
         return {
+          orderIds: [...g.orderIds],
           customer: g.customer,
           orderDate: g.orderDate,
           items: g.items,

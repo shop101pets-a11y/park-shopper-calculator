@@ -60,6 +60,10 @@ async function ensureSchema(sql) {
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tracking_number TEXT`;
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS carrier TEXT`;
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tracking_url TEXT`;
+
+  // "Finish packing" hides rows from the Tracking tab only - Finances keeps
+  // every dollar figure for these orders regardless of packed status.
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS packed BOOLEAN NOT NULL DEFAULT false`;
 }
 
 function rowToJson(row) {

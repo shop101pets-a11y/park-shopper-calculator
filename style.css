@@ -484,6 +484,10 @@ header h1 {
   text-align: left;
 }
 
+.finance-table tr.packed-row {
+  background: #dcfce7;
+}
+
 .finance-table th {
   color: var(--muted);
   font-weight: 600;
