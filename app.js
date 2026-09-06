@@ -221,23 +221,27 @@ function escapeHtml(str) {
 
 // --- Tabs ---
 const appEl = document.querySelector('.app');
-const tabCalculator = document.getElementById('tab-calculator');
-const tabFinances = document.getElementById('tab-finances');
-const calculatorView = document.getElementById('calculator-view');
-const financesView = document.getElementById('finances-view');
+const tabs = {
+  calculator: { btn: document.getElementById('tab-calculator'), view: document.getElementById('calculator-view'), wide: false },
+  finances: { btn: document.getElementById('tab-finances'), view: document.getElementById('finances-view'), wide: true },
+  tracking: { btn: document.getElementById('tab-tracking'), view: document.getElementById('tracking-view'), wide: true },
+};
 
-tabCalculator.addEventListener('click', () => switchTab('calculator'));
-tabFinances.addEventListener('click', () => switchTab('finances'));
+Object.entries(tabs).forEach(([name, tab]) => {
+  tab.btn.addEventListener('click', () => switchTab(name));
+});
 
-function switchTab(tab) {
-  const showFinances = tab === 'finances';
-  calculatorView.classList.toggle('hidden', showFinances);
-  financesView.classList.toggle('hidden', !showFinances);
-  appEl.classList.toggle('wide', showFinances);
-  tabCalculator.classList.toggle('active', !showFinances);
-  tabFinances.classList.toggle('active', showFinances);
-  tabCalculator.setAttribute('aria-selected', String(!showFinances));
-  tabFinances.setAttribute('aria-selected', String(showFinances));
+function switchTab(activeName) {
+  let wide = false;
+  Object.entries(tabs).forEach(([name, tab]) => {
+    const isActive = name === activeName;
+    tab.view.classList.toggle('hidden', !isActive);
+    tab.btn.classList.toggle('active', isActive);
+    tab.btn.setAttribute('aria-selected', String(isActive));
+    if (isActive) wide = tab.wide;
+  });
+  appEl.classList.toggle('wide', wide);
+  if (activeName === 'tracking') loadTracking();
 }
 
 // --- Finances ---
@@ -494,6 +498,49 @@ function renderFinances() {
   statEarnings.textContent = formatMoney(Math.round((debitBalance - creditBalance) * 100) / 100);
   statShopperFee.textContent = formatMoney(Math.round(shopperFeeSum * 100) / 100);
   statTips.textContent = formatMoney(Math.round(tipSum * 100) / 100);
+}
+
+// --- Tracking ---
+const trackingTableBody = document.getElementById('tracking-table-body');
+const trackingEmptyState = document.getElementById('tracking-empty-state');
+
+async function loadTracking() {
+  try {
+    const response = await fetch('/api/tracking');
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    renderTracking(data.orders);
+  } catch (err) {
+    trackingTableBody.innerHTML = '';
+    trackingEmptyState.textContent = `Couldn't load tracking: ${err.message}`;
+    trackingEmptyState.style.display = 'block';
+  }
+}
+
+function renderTracking(orders) {
+  trackingTableBody.innerHTML = '';
+  trackingEmptyState.textContent = 'No orders yet.';
+  trackingEmptyState.style.display = orders.length ? 'none' : 'block';
+
+  orders.forEach((order) => {
+    const tr = document.createElement('tr');
+    const trackingCell = order.trackingNumber
+      ? (order.trackingUrl
+        ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank" rel="noopener">${escapeHtml(order.trackingNumber)}</a>`
+        : escapeHtml(order.trackingNumber))
+      : '<span class="empty-state" style="padding:0;">Not yet shipped</span>';
+
+    tr.innerHTML = `
+      <td>${escapeHtml(order.customer)}</td>
+      <td>${escapeHtml(order.items.join(', '))}</td>
+      <td>${escapeHtml(order.carrier || '')}</td>
+      <td>${trackingCell}</td>
+      <td>${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</td>
+    `;
+    trackingTableBody.appendChild(tr);
+  });
 }
 
 render();

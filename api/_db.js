@@ -53,6 +53,13 @@ async function ensureSchema(sql) {
   // manual entry), this is synced data - refreshed on every sync rather
   // than only backfilled when missing.
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS square_fee NUMERIC NOT NULL DEFAULT 0`;
+
+  // Pirate Ship writes tracking info back onto the Square order's shipment
+  // fulfillment once a label is bought - often after the initial sync, so
+  // this always refreshes rather than only backfilling when missing.
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tracking_number TEXT`;
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS carrier TEXT`;
+  await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS tracking_url TEXT`;
 }
 
 function rowToJson(row) {
@@ -70,6 +77,9 @@ function rowToJson(row) {
     shippingCost: Number(row.shipping_cost),
     squareFee: Number(row.square_fee),
     orderDate: row.order_created_at,
+    trackingNumber: row.tracking_number,
+    carrier: row.carrier,
+    trackingUrl: row.tracking_url,
   };
 }
 

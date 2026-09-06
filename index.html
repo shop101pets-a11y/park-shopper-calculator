@@ -16,6 +16,7 @@
     <nav class="tabs" role="tablist">
       <button id="tab-calculator" class="tab-btn active" type="button" role="tab" aria-selected="true">Calculator</button>
       <button id="tab-finances" class="tab-btn" type="button" role="tab" aria-selected="false">Finances</button>
+      <button id="tab-tracking" class="tab-btn" type="button" role="tab" aria-selected="false">Tracking</button>
     </nav>
 
     <div id="calculator-view" class="view">
@@ -157,6 +158,30 @@
           </table>
         </div>
         <p id="finance-empty-state" class="empty-state">No orders yet.</p>
+      </section>
+    </div>
+
+    <div id="tracking-view" class="view hidden">
+      <section class="finance-table-section">
+        <div class="finance-table-header">
+          <h2>Tracking</h2>
+        </div>
+        <p class="import-hint">Pulled from Square - Pirate Ship writes tracking info back once a label is bought, so this fills in after Sync from Square on the Finances tab.</p>
+        <div class="table-scroll">
+          <table class="finance-table">
+            <thead>
+              <tr>
+                <th>Customer</th>
+                <th>Items</th>
+                <th>Carrier</th>
+                <th>Tracking number</th>
+                <th>Order date</th>
+              </tr>
+            </thead>
+            <tbody id="tracking-table-body"></tbody>
+          </table>
+        </div>
+        <p id="tracking-empty-state" class="empty-state">No orders yet.</p>
       </section>
     </div>
   </div>

@@ -67,10 +67,13 @@ module.exports = async (req, res) => {
 
     for (const row of freshRows) {
       await sql`
-        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping, square_fee, order_created_at)
-        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.squareFee}, ${row.orderCreatedAt})
+        INSERT INTO finance_rows (order_id, line_uid, customer, item, quantity, item_price, shopper_fee, tip, shipping, square_fee, order_created_at, tracking_number, carrier, tracking_url)
+        VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.squareFee}, ${row.orderCreatedAt}, ${row.trackingNumber}, ${row.carrier}, ${row.trackingUrl})
         ON CONFLICT (order_id, line_uid) DO UPDATE
           SET square_fee = EXCLUDED.square_fee,
+              tracking_number = EXCLUDED.tracking_number,
+              carrier = EXCLUDED.carrier,
+              tracking_url = EXCLUDED.tracking_url,
               order_created_at = COALESCE(finance_rows.order_created_at, EXCLUDED.order_created_at)
       `;
     }
@@ -129,7 +132,11 @@ async function fetchSquareFeesByOrderId(baseUrl, accessToken, locationId, orderI
 
 function parseOrderIntoRows(order, squareFeeCents) {
   const lineItems = order.line_items || [];
-  const customer = order.fulfillments?.[0]?.shipment_details?.recipient?.display_name || 'Unknown';
+  const shipmentDetails = order.fulfillments?.[0]?.shipment_details;
+  const customer = shipmentDetails?.recipient?.display_name || 'Unknown';
+  const trackingNumber = shipmentDetails?.tracking_number || null;
+  const carrier = shipmentDetails?.carrier || null;
+  const trackingUrl = shipmentDetails?.tracking_url || null;
 
   const shippingCents = (order.service_charges || [])
     .filter((sc) => sc.name === 'Shipping')
@@ -168,6 +175,9 @@ function parseOrderIntoRows(order, squareFeeCents) {
       lineUid: itemLine.uid,
       orderCreatedAt: order.created_at,
       customer,
+      trackingNumber,
+      carrier,
+      trackingUrl,
       item: itemLine.name,
       quantity: Number(itemLine.quantity) || 1,
       itemPrice: lineTotalCents / 100,
