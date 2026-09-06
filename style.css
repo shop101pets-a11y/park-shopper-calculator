@@ -202,6 +202,27 @@ header h1 {
   cursor: pointer;
 }
 
+.tracking-cell {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.btn-copy-tracking {
+  padding: 3px 8px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-copy-tracking:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
 .btn-copy:hover { border-color: var(--accent); color: var(--accent); }
 
 .btn-copy.copied {

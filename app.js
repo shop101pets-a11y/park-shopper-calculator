@@ -504,6 +504,18 @@ function renderFinances() {
 const trackingTableBody = document.getElementById('tracking-table-body');
 const trackingEmptyState = document.getElementById('tracking-empty-state');
 
+trackingTableBody.addEventListener('click', async (e) => {
+  const btn = e.target.closest('.btn-copy-tracking');
+  if (!btn) return;
+
+  await copyText(btn.dataset.tracking);
+  const original = btn.textContent;
+  btn.textContent = 'Copied!';
+  setTimeout(() => {
+    btn.textContent = original;
+  }, 1500);
+});
+
 async function loadTracking() {
   try {
     const response = await fetch('/api/tracking');
@@ -527,9 +539,14 @@ function renderTracking(orders) {
   orders.forEach((order) => {
     const tr = document.createElement('tr');
     const trackingCell = order.trackingNumber
-      ? (order.trackingUrl
-        ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank" rel="noopener">${escapeHtml(order.trackingNumber)}</a>`
-        : escapeHtml(order.trackingNumber))
+      ? `
+        <span class="tracking-cell">
+          ${order.trackingUrl
+            ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank" rel="noopener">${escapeHtml(order.trackingNumber)}</a>`
+            : escapeHtml(order.trackingNumber)}
+          <button class="btn-copy-tracking" type="button" data-tracking="${escapeHtml(order.trackingNumber)}">Copy</button>
+        </span>
+      `
       : '<span class="empty-state" style="padding:0;">Not yet shipped</span>';
 
     tr.innerHTML = `
