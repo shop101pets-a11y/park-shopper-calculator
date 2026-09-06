@@ -82,6 +82,16 @@ module.exports = async (req, res) => {
       // it's an account-wide setting (Square Dashboard > Payments & orders >
       // Payment links > Settings > General > Tip options).
       allow_tipping: true,
+      // Square's boolean fields default to false when omitted, so leaving
+      // this out entirely was silently disabling Afterpay/Cash App/Apple
+      // Pay/Google Pay on every link this app created (manually-created
+      // links don't go through this field at all, hence the difference).
+      accepted_payment_methods: {
+        apple_pay: true,
+        google_pay: true,
+        cash_app_pay: true,
+        afterpay_clearpay: true,
+      },
     },
   };
 
