@@ -4,16 +4,6 @@ function normalizeName(name) {
   return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-// Local (business timezone) calendar day the order was placed on. Using UTC
-// here split same-evening orders across two "days" whenever they landed
-// after 8pm Eastern (already UTC tomorrow), which broke same-day merging.
-const BUSINESS_TIMEZONE = 'America/New_York';
-const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIMEZONE });
-
-function dayKey(dateStr) {
-  return dateStr ? dayFormatter.format(new Date(dateStr)) : null;
-}
-
 module.exports = async (req, res) => {
   try {
     const sql = getSql();
@@ -43,14 +33,14 @@ module.exports = async (req, res) => {
       ORDER BY order_created_at DESC NULLS LAST, id DESC
     `;
 
-    // Same customer, same day, one shipment - merge into a single row so a
-    // multi-order combined shipment doesn't show as duplicate tracking rows.
-    // Rows with no order date fall back to grouping by order_id alone, so
-    // undated legacy rows never merge with something they shouldn't.
+    // Any unpacked orders from the same customer merge into one shipment,
+    // regardless of date - e.g. holding a customer's order until a second
+    // item is bought, then shipping together. Once "Finish packing" removes
+    // an order from this pool, a later new order from the same customer
+    // starts a fresh row rather than merging with the already-shipped one.
     const groups = new Map();
     for (const row of rows) {
-      const day = dayKey(row.order_created_at);
-      const key = day ? `${normalizeName(row.customer)}|${day}` : `order:${row.order_id}`;
+      const key = normalizeName(row.customer);
 
       if (!groups.has(key)) {
         groups.set(key, {
