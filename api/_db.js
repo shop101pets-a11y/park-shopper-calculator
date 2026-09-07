@@ -81,6 +81,7 @@ function rowToJson(row) {
     shippingCost: Number(row.shipping_cost),
     squareFee: Number(row.square_fee),
     orderDate: row.order_created_at,
+    packed: row.packed,
     trackingNumber: row.tracking_number,
     carrier: row.carrier,
     trackingUrl: row.tracking_url,
