@@ -70,7 +70,7 @@ function guessContactPreference({ phone, email, instagram }) {
 }
 
 function parseWorkbook(buffer) {
-  const workbook = XLSX.read(buffer, { type: 'buffer' });
+  const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
   const sheet = workbook.Sheets[workbook.SheetNames[0]];
   const [headers] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
@@ -84,7 +84,7 @@ function parseWorkbook(buffer) {
   rows.forEach((row, rowIndex) => {
     const contact = parseContact(row[CONTACT_HEADER]);
     const notes = notesHeader ? row[notesHeader] : null;
-    const submittedAt = row.Timestamp || null;
+    const submittedAt = row.Timestamp instanceof Date ? row.Timestamp.toISOString() : (row.Timestamp || null);
 
     let itemsFoundInRow = 0;
 
