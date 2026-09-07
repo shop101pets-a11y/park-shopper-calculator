@@ -10,7 +10,12 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     if (req.method === 'POST') {
-      const { orderIds } = req.body || {};
+      const { orderIds, resetAll } = req.body || {};
+      if (resetAll) {
+        await sql`UPDATE finance_rows SET packed = false`;
+        res.status(200).json({ reset: true });
+        return;
+      }
       if (!Array.isArray(orderIds) || orderIds.length === 0) {
         res.status(400).json({ error: 'orderIds is required and must be a non-empty array' });
         return;
