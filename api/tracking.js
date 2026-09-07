@@ -4,9 +4,14 @@ function normalizeName(name) {
   return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
 }
 
-// UTC calendar day the order was placed on.
+// Local (business timezone) calendar day the order was placed on. Using UTC
+// here split same-evening orders across two "days" whenever they landed
+// after 8pm Eastern (already UTC tomorrow), which broke same-day merging.
+const BUSINESS_TIMEZONE = 'America/New_York';
+const dayFormatter = new Intl.DateTimeFormat('en-CA', { timeZone: BUSINESS_TIMEZONE });
+
 function dayKey(dateStr) {
-  return dateStr ? new Date(dateStr).toISOString().slice(0, 10) : null;
+  return dateStr ? dayFormatter.format(new Date(dateStr)) : null;
 }
 
 module.exports = async (req, res) => {
