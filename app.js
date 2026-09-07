@@ -787,7 +787,7 @@ function requestRowHtml(req) {
         <option value="paid" ${req.status === 'paid' ? 'selected' : ''}>Paid</option>
         <option value="purchased" ${req.status === 'purchased' ? 'selected' : ''}>Purchased</option>
       </select>
-      <span>${escapeHtml(req.customer)}</span>
+      <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
     </div>
   `;
 }
