@@ -64,6 +64,32 @@ async function ensureSchema(sql) {
   // "Finish packing" hides rows from the Tracking tab only - Finances keeps
   // every dollar figure for these orders regardless of packed status.
   await sql`ALTER TABLE finance_rows ADD COLUMN IF NOT EXISTS packed BOOLEAN NOT NULL DEFAULT false`;
+
+  // Shopping List: customer requests sourced from the Google Form export.
+  // No canonical "product" table - tags are the retrieval mechanism instead,
+  // since a fixed product catalog can't keep up with thousands of rotating
+  // park-exclusive items. reference_image_url is the customer's own photo
+  // link (Google Drive, from the form) - persistent, unlike session photos.
+  await sql`
+    CREATE TABLE IF NOT EXISTS shopping_requests (
+      id SERIAL PRIMARY KEY,
+      customer TEXT NOT NULL,
+      contact_phone TEXT,
+      contact_email TEXT,
+      contact_instagram TEXT,
+      contact_preference TEXT NOT NULL DEFAULT 'phone',
+      item_description TEXT NOT NULL,
+      quantity INTEGER NOT NULL DEFAULT 1,
+      size TEXT,
+      reference_image_url TEXT,
+      tags TEXT[] NOT NULL DEFAULT '{}',
+      status TEXT NOT NULL DEFAULT 'requested',
+      notes TEXT,
+      source TEXT,
+      submitted_at TIMESTAMPTZ,
+      created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+    )
+  `;
 }
 
 function rowToJson(row) {
@@ -88,4 +114,23 @@ function rowToJson(row) {
   };
 }
 
-module.exports = { getSql, ensureSchema, rowToJson };
+function shoppingRequestToJson(row) {
+  return {
+    id: row.id,
+    customer: row.customer,
+    contactPhone: row.contact_phone,
+    contactEmail: row.contact_email,
+    contactInstagram: row.contact_instagram,
+    contactPreference: row.contact_preference,
+    item: row.item_description,
+    quantity: Number(row.quantity),
+    size: row.size,
+    referenceImageUrl: row.reference_image_url,
+    tags: row.tags || [],
+    status: row.status,
+    notes: row.notes,
+    submittedAt: row.submitted_at,
+  };
+}
+
+module.exports = { getSql, ensureSchema, rowToJson, shoppingRequestToJson };

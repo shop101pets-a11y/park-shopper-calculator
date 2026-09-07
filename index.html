@@ -17,6 +17,7 @@
       <button id="tab-calculator" class="tab-btn active" type="button" role="tab" aria-selected="true">Calculator</button>
       <button id="tab-finances" class="tab-btn" type="button" role="tab" aria-selected="false">Finances</button>
       <button id="tab-tracking" class="tab-btn" type="button" role="tab" aria-selected="false">Tracking</button>
+      <button id="tab-shopping-list" class="tab-btn" type="button" role="tab" aria-selected="false">Shopping List</button>
     </nav>
 
     <div id="calculator-view" class="view">
@@ -184,6 +185,55 @@
           </table>
         </div>
         <p id="tracking-empty-state" class="empty-state">No orders yet.</p>
+      </section>
+    </div>
+
+    <div id="shopping-list-view" class="view hidden">
+      <section class="import-section">
+        <h2>Import requests (Google Form export)</h2>
+        <p class="import-hint">Upload the form responses export (.xlsx). Parsing this form's branching structure is best-effort - review and fix each row below before importing.</p>
+        <div class="import-controls">
+          <input type="file" id="shopping-import-file-input" accept=".xlsx,.csv">
+          <button id="shopping-preview-import-btn" class="btn-add" type="button" disabled>Preview import</button>
+        </div>
+        <p id="shopping-import-error" class="payment-link-error" style="display:none;"></p>
+        <div id="shopping-import-preview" class="import-preview" style="display:none;">
+          <div class="table-scroll">
+            <table class="finance-table">
+              <thead>
+                <tr>
+                  <th>Import?</th>
+                  <th>Customer</th>
+                  <th>Phone</th>
+                  <th>Email</th>
+                  <th>Instagram</th>
+                  <th>Prefer</th>
+                  <th>Item</th>
+                  <th>Qty</th>
+                  <th>Size</th>
+                </tr>
+              </thead>
+              <tbody id="shopping-import-table-body"></tbody>
+            </table>
+          </div>
+          <button id="shopping-confirm-import-btn" class="btn-add" type="button">Confirm import</button>
+        </div>
+      </section>
+
+      <section class="finance-table-section">
+        <div class="finance-table-header">
+          <h2>Shopping List</h2>
+          <div class="view-toggle">
+            <button id="shopping-view-product-btn" class="btn-toggle active" type="button">By Product</button>
+            <button id="shopping-view-customer-btn" class="btn-toggle" type="button">By Customer</button>
+          </div>
+        </div>
+        <div class="import-controls">
+          <input type="text" id="shopping-tag-filter" placeholder="Filter by tag (e.g. Elsa, sweatshirt)...">
+        </div>
+        <div id="shopping-tag-cloud" class="tag-cloud"></div>
+        <div id="shopping-list-content"></div>
+        <p id="shopping-list-empty-state" class="empty-state">No requests yet - import your form responses above.</p>
       </section>
     </div>
   </div>
