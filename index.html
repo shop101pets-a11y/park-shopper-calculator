@@ -190,8 +190,17 @@
 
     <div id="shopping-list-view" class="view hidden">
       <section class="import-section">
-        <h2>Import requests (Google Form export)</h2>
-        <p class="import-hint">Upload the form responses export (.xlsx). Parsing this form's branching structure is best-effort - review and fix each row below before importing.</p>
+        <h2>Sync requests</h2>
+        <p class="import-hint">Pulls new responses directly from the linked Google Sheet - safe to click anytime, only genuinely new rows get added.</p>
+        <div class="import-controls">
+          <button id="shopping-sync-btn" class="btn-add" type="button">Sync from Google Form</button>
+        </div>
+        <p id="shopping-sync-error" class="payment-link-error" style="display:none;"></p>
+      </section>
+
+      <section class="import-section">
+        <h2>Or import a downloaded export (.xlsx)</h2>
+        <p class="import-hint">Fallback if the Sheets sync isn't set up yet. Parsing this form's branching structure is best-effort - review and fix each row below before importing.</p>
         <div class="import-controls">
           <input type="file" id="shopping-import-file-input" accept=".xlsx,.csv">
           <button id="shopping-preview-import-btn" class="btn-add" type="button" disabled>Preview import</button>

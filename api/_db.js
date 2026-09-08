@@ -90,6 +90,17 @@ async function ensureSchema(sql) {
       created_at TIMESTAMPTZ NOT NULL DEFAULT now()
     )
   `;
+
+  // Lets re-syncing/re-importing be safe to run repeatedly - only genuinely
+  // new (timestamp, item) pairs get inserted. NULLs don't collide in a
+  // Postgres unique index, so manually-added rows (no submitted_at) are
+  // unaffected.
+  await sql`CREATE UNIQUE INDEX IF NOT EXISTS shopping_requests_submitted_item_key ON shopping_requests (submitted_at, item_description)`;
+
+  // Raw Drive file ID (extracted from whatever URL shape the form gives us),
+  // used by the image proxy to fetch content via the Drive API instead of
+  // hotlinking the unreliable public thumbnail endpoint.
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS reference_image_file_id TEXT`;
 }
 
 function rowToJson(row) {
@@ -126,6 +137,7 @@ function shoppingRequestToJson(row) {
     quantity: Number(row.quantity),
     size: row.size,
     referenceImageUrl: row.reference_image_url,
+    referenceImageFileId: row.reference_image_file_id,
     tags: row.tags || [],
     status: row.status,
     notes: row.notes,

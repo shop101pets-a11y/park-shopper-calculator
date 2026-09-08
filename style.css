@@ -437,6 +437,15 @@ header h1 {
   font-size: 0.85rem;
 }
 
+.ref-thumb {
+  width: 36px;
+  height: 36px;
+  object-fit: cover;
+  border-radius: 6px;
+  vertical-align: middle;
+  border: 1px solid var(--border);
+}
+
 .shopping-request-row:first-child {
   border-top: none;
 }

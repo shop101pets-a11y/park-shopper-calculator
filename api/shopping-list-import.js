@@ -1,73 +1,7 @@
 const XLSX = require('xlsx');
-const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
-
-// This Google Form branches on "how many items" into differently-shaped
-// column groups (1-item, 2-item, 3-item, 4-item, "more than 4" free text).
-// Rather than hardcode column positions per branch (fragile - breaks if the
-// form is edited), we scan the header row for "Item N of M" columns and
-// pull each one's image/quantity/size from the next few columns
-// *positionally* (that adjacency held consistently across every branch we
-// inspected). Contact info and notes have no real field label in this form
-// (Google exports them as "Column 30" / a comments column), so those are
-// matched by their literal header text instead.
-
-const ITEM_HEADER_RE = /^Item \d+ of \d+/;
-const IMAGE_HEADER_RE = /image|picture/i;
-const QUANTITY_HEADER_RE = /quantity/i;
-const SIZE_HEADER_RE = /size/i;
-const OVERFLOW_HEADER_RE = /please add description of items/i;
-const CONTACT_HEADER = 'Column 30';
-const NOTES_HEADER_RE = /questions.*comments|comments.*feedback|feeback/i;
-
-function findItemGroups(headers) {
-  const groups = [];
-  headers.forEach((header, index) => {
-    if (!header || !ITEM_HEADER_RE.test(header)) return;
-    const group = { nameHeader: header };
-    for (let i = index + 1; i < Math.min(index + 4, headers.length); i++) {
-      const h = headers[i];
-      if (!h) continue;
-      if (!group.imageHeader && IMAGE_HEADER_RE.test(h)) group.imageHeader = h;
-      else if (!group.quantityHeader && QUANTITY_HEADER_RE.test(h)) group.quantityHeader = h;
-      else if (!group.sizeHeader && SIZE_HEADER_RE.test(h)) group.sizeHeader = h;
-    }
-    groups.push(group);
-  });
-  return groups;
-}
-
-function parseContact(raw) {
-  if (!raw || !String(raw).trim()) {
-    return { customer: 'Unknown', phone: null, email: null, instagram: null };
-  }
-  let text = String(raw).trim();
-
-  const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
-  const email = emailMatch ? emailMatch[0] : null;
-  if (email) text = text.replace(email, '');
-
-  const phoneMatch = text.match(/(\+?1?[\s.-]?\(?\d{3}\)?[\s.-]?\d{3}[\s.-]?\d{4})/);
-  const phone = phoneMatch ? phoneMatch[0].trim() : null;
-  if (phone) text = text.replace(phone, '');
-
-  let instagram = null;
-  if (/instagram|tiktok|\bIG\b/i.test(text)) {
-    instagram = text.replace(/instagram|tiktok|\bIG\b/gi, '').replace(/[:@]/g, ' ').replace(/\s+/g, ' ').trim();
-    text = '';
-  }
-
-  const nameGuess = text.replace(/^[\s\-:,]+|[\s\-:,]+$/g, '').replace(/\s+/g, ' ').trim();
-  const customer = nameGuess || instagram || email || phone || 'Unknown';
-
-  return { customer, phone, email, instagram: instagram || null };
-}
-
-function guessContactPreference({ phone, email, instagram }) {
-  if (phone) return 'phone';
-  if (email) return 'email';
-  if (instagram) return 'instagram';
-  return 'phone';
-}
+const { getSql, ensureSchema } = require('./_db');
+const { parseFormRows } = require('./_shopping-list-parser');
+const { extractDriveFileId } = require('./_google');
 
 function parseWorkbook(buffer) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
@@ -75,84 +9,9 @@ function parseWorkbook(buffer) {
   const [headers] = XLSX.utils.sheet_to_json(sheet, { header: 1, defval: null });
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
 
-  const itemGroups = findItemGroups(headers);
-  const overflowHeaders = headers.filter((h) => h && OVERFLOW_HEADER_RE.test(h));
-  const notesHeader = headers.find((h) => h && NOTES_HEADER_RE.test(h));
-
-  const candidates = [];
-
-  rows.forEach((row, rowIndex) => {
-    const contact = parseContact(row[CONTACT_HEADER]);
-    const notes = notesHeader ? row[notesHeader] : null;
-    const submittedAt = row.Timestamp instanceof Date ? row.Timestamp.toISOString() : (row.Timestamp || null);
-
-    let itemsFoundInRow = 0;
-
-    for (const group of itemGroups) {
-      const itemName = row[group.nameHeader];
-      if (!itemName || !String(itemName).trim()) continue;
-      itemsFoundInRow += 1;
-
-      candidates.push({
-        rowIndex,
-        customer: contact.customer,
-        phone: contact.phone,
-        email: contact.email,
-        instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
-        item: String(itemName).trim(),
-        quantity: Number(group.quantityHeader ? row[group.quantityHeader] : 1) || 1,
-        size: group.sizeHeader ? row[group.sizeHeader] : null,
-        referenceImageUrl: group.imageHeader ? row[group.imageHeader] : null,
-        notes: notes || null,
-        submittedAt,
-      });
-    }
-
-    // "More than 4 items" branch: free text, can't be reliably split into
-    // discrete items - one candidate row per response, flagged for the
-    // shopper to break up manually if needed.
-    for (const header of overflowHeaders) {
-      const text = row[header];
-      if (!text || !String(text).trim()) continue;
-      itemsFoundInRow += 1;
-      candidates.push({
-        rowIndex,
-        customer: contact.customer,
-        phone: contact.phone,
-        email: contact.email,
-        instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
-        item: String(text).trim(),
-        quantity: 1,
-        size: null,
-        referenceImageUrl: null,
-        notes: notes || null,
-        submittedAt,
-        needsSplitting: true,
-      });
-    }
-
-    if (itemsFoundInRow === 0) {
-      candidates.push({
-        rowIndex,
-        customer: contact.customer,
-        phone: contact.phone,
-        email: contact.email,
-        instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
-        item: '',
-        quantity: 1,
-        size: null,
-        referenceImageUrl: null,
-        notes: notes || null,
-        submittedAt,
-        unparsed: true,
-      });
-    }
-  });
-
-  return candidates;
+  return parseFormRows(headers, rows, (row) => (
+    row.Timestamp instanceof Date ? row.Timestamp.toISOString() : (row.Timestamp || null)
+  ));
 }
 
 module.exports = async (req, res) => {
@@ -177,11 +36,12 @@ module.exports = async (req, res) => {
         await sql`
           INSERT INTO shopping_requests
             (customer, contact_phone, contact_email, contact_instagram, contact_preference,
-             item_description, quantity, size, reference_image_url, notes, source, submitted_at)
+             item_description, quantity, size, reference_image_url, reference_image_file_id, notes, source, submitted_at)
           VALUES
             (${r.customer}, ${r.phone || null}, ${r.email || null}, ${r.instagram || null}, ${r.contactPreference},
-             ${r.item}, ${r.quantity || 1}, ${r.size || null}, ${r.referenceImageUrl || null}, ${r.notes || null},
-             'google_form_import', ${r.submittedAt || null})
+             ${r.item}, ${r.quantity || 1}, ${r.size || null}, ${r.referenceImageUrl || null},
+             ${extractDriveFileId(r.referenceImageUrl)}, ${r.notes || null}, 'google_form_import', ${r.submittedAt || null})
+          ON CONFLICT (submitted_at, item_description) DO NOTHING
         `;
       }
 

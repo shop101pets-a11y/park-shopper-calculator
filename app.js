@@ -615,6 +615,30 @@ const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
 const shoppingTagCloud = document.getElementById('shopping-tag-cloud');
 const shoppingListContent = document.getElementById('shopping-list-content');
 const shoppingListEmptyState = document.getElementById('shopping-list-empty-state');
+const shoppingSyncBtn = document.getElementById('shopping-sync-btn');
+const shoppingSyncError = document.getElementById('shopping-sync-error');
+
+shoppingSyncBtn.addEventListener('click', async () => {
+  shoppingSyncError.style.display = 'none';
+  shoppingSyncBtn.disabled = true;
+  shoppingSyncBtn.textContent = 'Syncing...';
+
+  try {
+    const response = await fetch('/api/shopping-list-sync');
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    shoppingRequests = data.requests;
+    renderShoppingList();
+  } catch (err) {
+    shoppingSyncError.textContent = `Couldn't sync: ${err.message}`;
+    shoppingSyncError.style.display = 'block';
+  } finally {
+    shoppingSyncBtn.disabled = false;
+    shoppingSyncBtn.textContent = 'Sync from Google Form';
+  }
+});
 
 shoppingImportFileInput.addEventListener('change', () => {
   shoppingPreviewImportBtn.disabled = !shoppingImportFileInput.files.length;
@@ -771,10 +795,28 @@ shoppingTagCloud.addEventListener('click', (e) => {
   renderShoppingList();
 });
 
+// Google Forms links to the customer's uploaded photo as a Drive "view"
+// page, not a directly-renderable image URL. Google's unofficial hotlink
+// thumbnail endpoints turned out to be unreliable in testing (429/404), so
+// this goes through our own /api/drive-image proxy instead, which fetches
+// the file via the real Drive API. Prefers the file ID already stored at
+// import time; falls back to extracting one from the URL for older rows
+// imported before that column existed.
+function referenceImageProxyUrl(req) {
+  const fileId = req.referenceImageFileId || (req.referenceImageUrl || '').match(/[-\w]{25,}/)?.[0];
+  return fileId ? `/api/drive-image?fileId=${fileId}` : null;
+}
+
 function requestRowHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
-  const imageLink = req.referenceImageUrl
-    ? `<a href="${escapeHtml(req.referenceImageUrl)}" target="_blank" rel="noopener">photo</a>`
+  const thumbUrl = referenceImageProxyUrl(req);
+  const linkTarget = req.referenceImageUrl || thumbUrl;
+  const imageLink = linkTarget
+    ? `<a href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${
+        thumbUrl
+          ? `<img src="${escapeHtml(thumbUrl)}" class="ref-thumb" alt="reference photo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'photo'}))">`
+          : 'photo'
+      }</a>`
     : '';
   return `
     <div class="shopping-request-row" data-id="${req.id}">
