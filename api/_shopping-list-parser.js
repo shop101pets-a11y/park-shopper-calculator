@@ -156,4 +156,15 @@ function parseFormRows(headers, rows, submittedAtOf) {
   return candidates;
 }
 
-module.exports = { parseFormRows };
+// Truncates to whole-second precision so the same submission always
+// produces the same ISO string regardless of source - the xlsx path reads
+// an exact-millisecond Date, while the Sheets API returns a formatted
+// string with no sub-second precision, and those two representations of
+// the *same* timestamp would otherwise never match the (submitted_at,
+// item_description) dedup key.
+function normalizeTimestamp(date) {
+  if (!date || Number.isNaN(date.getTime())) return null;
+  return new Date(Math.floor(date.getTime() / 1000) * 1000).toISOString();
+}
+
+module.exports = { parseFormRows, normalizeTimestamp };

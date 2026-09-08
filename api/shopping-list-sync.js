@@ -1,6 +1,6 @@
 const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
 const { getGoogleAccessToken, extractDriveFileId } = require('./_google');
-const { parseFormRows } = require('./_shopping-list-parser');
+const { parseFormRows, normalizeTimestamp } = require('./_shopping-list-parser');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -58,12 +58,9 @@ module.exports = async (req, res) => {
       return obj;
     });
 
-    const candidates = parseFormRows(headers, rows, (row) => {
-      const raw = row.Timestamp;
-      if (!raw) return null;
-      const parsed = new Date(raw);
-      return Number.isNaN(parsed.getTime()) ? null : parsed.toISOString();
-    }).filter((c) => c.item);
+    const candidates = parseFormRows(headers, rows, (row) => (
+      row.Timestamp ? normalizeTimestamp(new Date(row.Timestamp)) : null
+    )).filter((c) => c.item);
 
     const sql = getSql();
     await ensureSchema(sql);

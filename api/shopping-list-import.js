@@ -1,6 +1,6 @@
 const XLSX = require('xlsx');
 const { getSql, ensureSchema } = require('./_db');
-const { parseFormRows } = require('./_shopping-list-parser');
+const { parseFormRows, normalizeTimestamp } = require('./_shopping-list-parser');
 const { extractDriveFileId } = require('./_google');
 
 function parseWorkbook(buffer) {
@@ -10,7 +10,7 @@ function parseWorkbook(buffer) {
   const rows = XLSX.utils.sheet_to_json(sheet, { defval: null });
 
   return parseFormRows(headers, rows, (row) => (
-    row.Timestamp instanceof Date ? row.Timestamp.toISOString() : (row.Timestamp || null)
+    row.Timestamp instanceof Date ? normalizeTimestamp(row.Timestamp) : null
   ));
 }
 
