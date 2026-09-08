@@ -28,6 +28,22 @@ async function getGoogleAccessToken() {
   if (!email || !rawKey) {
     throw new Error('Google service account credentials are not configured on the server');
   }
+
+  if (process.env.GOOGLE_KEY_DEBUG === 'true') {
+    const err = new Error('KEY_DEBUG');
+    err.debug = {
+      length: rawKey.length,
+      first20: rawKey.slice(0, 20),
+      last20: rawKey.slice(-20),
+      hasLiteralBackslashN: rawKey.includes('\\n'),
+      hasRealNewline: rawKey.includes('\n'),
+      startsWithQuote: rawKey.startsWith('"'),
+      startsWithBrace: rawKey.trim().startsWith('{'),
+      startsWithBegin: rawKey.trim().startsWith('-----BEGIN'),
+    };
+    throw err;
+  }
+
   const privateKey = rawKey.replace(/\\n/g, '\n');
 
   const now = Math.floor(Date.now() / 1000);
