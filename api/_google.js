@@ -29,22 +29,13 @@ async function getGoogleAccessToken() {
     throw new Error('Google service account credentials are not configured on the server');
   }
 
-  if (process.env.GOOGLE_KEY_DEBUG === 'true') {
-    const err = new Error('KEY_DEBUG');
-    err.debug = {
-      length: rawKey.length,
-      first20: rawKey.slice(0, 20),
-      last20: rawKey.slice(-20),
-      hasLiteralBackslashN: rawKey.includes('\\n'),
-      hasRealNewline: rawKey.includes('\n'),
-      startsWithQuote: rawKey.startsWith('"'),
-      startsWithBrace: rawKey.trim().startsWith('{'),
-      startsWithBegin: rawKey.trim().startsWith('-----BEGIN'),
-    };
-    throw err;
+  let privateKey = rawKey.replace(/\\n/g, '\n').trim();
+  // Tolerate a copy-paste that only grabbed the base64 body, missing the
+  // PEM header/footer lines - easy mistake given how JSON files render
+  // multi-line string values.
+  if (!privateKey.includes('-----BEGIN')) {
+    privateKey = `-----BEGIN PRIVATE KEY-----\n${privateKey}\n-----END PRIVATE KEY-----\n`;
   }
-
-  const privateKey = rawKey.replace(/\\n/g, '\n');
 
   const now = Math.floor(Date.now() / 1000);
   const jwt = signJwt(

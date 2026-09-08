@@ -91,6 +91,6 @@ module.exports = async (req, res) => {
       _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length },
     });
   } catch (err) {
-    res.status(500).json({ error: err.message, debug: err.debug });
+    res.status(500).json({ error: err.message });
   }
 };
