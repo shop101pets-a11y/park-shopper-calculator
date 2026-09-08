@@ -156,15 +156,18 @@ function parseFormRows(headers, rows, submittedAtOf) {
   return candidates;
 }
 
-// Truncates to whole-second precision so the same submission always
-// produces the same ISO string regardless of source - the xlsx path reads
-// an exact-millisecond Date, while the Sheets API returns a formatted
-// string with no sub-second precision, and those two representations of
-// the *same* timestamp would otherwise never match the (submitted_at,
-// item_description) dedup key.
+// Truncates to whole-minute precision so the same submission always
+// produces the same ISO string regardless of source. Second-precision
+// truncation wasn't enough: the xlsx path reads the exact underlying
+// timestamp, while the Sheets API returns a *formatted* string that
+// rounds to the nearest second for display - the same submission can
+// come back a second apart depending on source, which would still
+// defeat the (submitted_at, item_description) dedup key at second
+// precision. A customer re-requesting the identical item within the
+// same minute is an acceptable, unlikely edge case to trade for that.
 function normalizeTimestamp(date) {
   if (!date || Number.isNaN(date.getTime())) return null;
-  return new Date(Math.floor(date.getTime() / 1000) * 1000).toISOString();
+  return new Date(Math.floor(date.getTime() / 60000) * 60000).toISOString();
 }
 
 module.exports = { parseFormRows, normalizeTimestamp };

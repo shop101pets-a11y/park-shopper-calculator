@@ -102,29 +102,29 @@ async function ensureSchema(sql) {
   // hotlinking the unreliable public thumbnail endpoint.
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS reference_image_file_id TEXT`;
 
-  // Before the second-precision fix, the same submission could get inserted
-  // twice under different millisecond-precision timestamps, defeating the
-  // dedup index. Drop the later-id duplicate of any pair that would
-  // collide once normalized, *then* normalize - doing this in the other
-  // order makes the UPDATE below violate the unique index itself.
+  // Before the minute-precision fix, the same submission could get inserted
+  // twice under slightly different timestamps (xlsx reads exact time;
+  // Sheets' formatted-string API rounds to the nearest second for display),
+  // defeating the dedup index even at second precision. Drop the later-id
+  // duplicate of any pair that would collide once normalized, *then*
+  // normalize - doing this in the other order makes the UPDATE below
+  // violate the unique index itself.
   await sql`
     DELETE FROM shopping_requests a
     USING shopping_requests b
     WHERE a.id > b.id
       AND a.item_description = b.item_description
       AND a.submitted_at IS NOT NULL AND b.submitted_at IS NOT NULL
-      AND date_trunc('second', a.submitted_at) = date_trunc('second', b.submitted_at)
+      AND date_trunc('minute', a.submitted_at) = date_trunc('minute', b.submitted_at)
   `;
 
-  // Rows inserted before the second-precision fix still carry millisecond
-  // timestamps, which would never match the (now second-precision) values
-  // new syncs produce - normalize them once so the dedup key actually
-  // works against pre-existing rows too. Idempotent: only touches rows
-  // that still need it.
+  // Normalize every row to minute precision so the dedup key works
+  // consistently regardless of which path (xlsx vs. Sheets sync) a row
+  // came in through. Idempotent: only touches rows that still need it.
   await sql`
     UPDATE shopping_requests
-    SET submitted_at = date_trunc('second', submitted_at)
-    WHERE submitted_at IS NOT NULL AND submitted_at <> date_trunc('second', submitted_at)
+    SET submitted_at = date_trunc('minute', submitted_at)
+    WHERE submitted_at IS NOT NULL AND submitted_at <> date_trunc('minute', submitted_at)
   `;
 }
 
