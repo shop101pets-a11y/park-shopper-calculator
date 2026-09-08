@@ -101,6 +101,17 @@ async function ensureSchema(sql) {
   // used by the image proxy to fetch content via the Drive API instead of
   // hotlinking the unreliable public thumbnail endpoint.
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS reference_image_file_id TEXT`;
+
+  // Rows inserted before the second-precision fix still carry millisecond
+  // timestamps, which would never match the (now second-precision) values
+  // new syncs produce - normalize them once so the dedup key actually
+  // works against pre-existing rows too. Idempotent: only touches rows
+  // that still need it.
+  await sql`
+    UPDATE shopping_requests
+    SET submitted_at = date_trunc('second', submitted_at)
+    WHERE submitted_at IS NOT NULL AND submitted_at <> date_trunc('second', submitted_at)
+  `;
 }
 
 function rowToJson(row) {
