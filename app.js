@@ -821,7 +821,6 @@ function requestRowHtml(req) {
   return `
     <div class="shopping-request-row" data-id="${req.id}">
       <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''}</div>
-      <input type="text" class="tag-edit-input" data-field="tags" value="${escapeHtml(req.tags.join(', '))}" placeholder="tags, comma, separated">
       <select data-field="status">
         <option value="requested" ${req.status === 'requested' ? 'selected' : ''}>Requested</option>
         <option value="found" ${req.status === 'found' ? 'selected' : ''}>Found</option>

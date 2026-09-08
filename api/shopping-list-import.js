@@ -2,6 +2,7 @@ const XLSX = require('xlsx');
 const { getSql, ensureSchema } = require('./_db');
 const { parseFormRows, normalizeTimestamp } = require('./_shopping-list-parser');
 const { extractDriveFileId } = require('./_google');
+const { generateTags } = require('./_ai-tagging');
 
 function parseWorkbook(buffer) {
   const workbook = XLSX.read(buffer, { type: 'buffer', cellDates: true });
@@ -32,20 +33,32 @@ module.exports = async (req, res) => {
       const sql = getSql();
       await ensureSchema(sql);
 
+      let newlyTagged = 0;
+
       for (const r of requests) {
-        await sql`
+        const fileId = extractDriveFileId(r.referenceImageUrl);
+        const inserted = await sql`
           INSERT INTO shopping_requests
             (customer, contact_phone, contact_email, contact_instagram, contact_preference,
              item_description, quantity, size, reference_image_url, reference_image_file_id, notes, source, submitted_at)
           VALUES
             (${r.customer}, ${r.phone || null}, ${r.email || null}, ${r.instagram || null}, ${r.contactPreference},
              ${r.item}, ${r.quantity || 1}, ${r.size || null}, ${r.referenceImageUrl || null},
-             ${extractDriveFileId(r.referenceImageUrl)}, ${r.notes || null}, 'google_form_import', ${r.submittedAt || null})
+             ${fileId}, ${r.notes || null}, 'google_form_import', ${r.submittedAt || null})
           ON CONFLICT (submitted_at, item_description) DO NOTHING
+          RETURNING id
         `;
+
+        if (inserted.length) {
+          const tags = await generateTags({ itemDescription: r.item, imageFileId: fileId });
+          if (tags.length) {
+            await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${inserted[0].id}`;
+            newlyTagged += 1;
+          }
+        }
       }
 
-      res.status(200).json({ imported: requests.length });
+      res.status(200).json({ imported: requests.length, newlyTagged });
       return;
     }
 

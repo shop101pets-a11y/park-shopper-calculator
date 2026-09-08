@@ -1,6 +1,7 @@
 const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
 const { getGoogleAccessToken, extractDriveFileId } = require('./_google');
 const { parseFormRows, normalizeTimestamp } = require('./_shopping-list-parser');
+const { generateTags } = require('./_ai-tagging');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -65,17 +66,48 @@ module.exports = async (req, res) => {
     const sql = getSql();
     await ensureSchema(sql);
 
+    let newlyTagged = 0;
+
     for (const r of candidates) {
-      await sql`
+      const fileId = extractDriveFileId(r.referenceImageUrl);
+      const inserted = await sql`
         INSERT INTO shopping_requests
           (customer, contact_phone, contact_email, contact_instagram, contact_preference,
            item_description, quantity, size, reference_image_url, reference_image_file_id, notes, source, submitted_at)
         VALUES
           (${r.customer}, ${r.phone || null}, ${r.email || null}, ${r.instagram || null}, ${r.contactPreference},
            ${r.item}, ${r.quantity || 1}, ${r.size || null}, ${r.referenceImageUrl || null},
-           ${extractDriveFileId(r.referenceImageUrl)}, ${r.notes || null}, 'google_sheets_sync', ${r.submittedAt || null})
+           ${fileId}, ${r.notes || null}, 'google_sheets_sync', ${r.submittedAt || null})
         ON CONFLICT (submitted_at, item_description) DO NOTHING
+        RETURNING id
       `;
+
+      // Only spend an AI call on rows that actually got inserted - a
+      // duplicate hit by ON CONFLICT already has (or will get) its tags.
+      if (inserted.length) {
+        const tags = await generateTags({ itemDescription: r.item, imageFileId: fileId });
+        if (tags.length) {
+          await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${inserted[0].id}`;
+          newlyTagged += 1;
+        }
+      }
+    }
+
+    // Backfill any older rows saved before AI tagging existed (or where
+    // generation failed at the time). Capped per run so a large backlog
+    // can't make a single sync take too long.
+    const untagged = await sql`
+      SELECT id, item_description, reference_image_file_id
+      FROM shopping_requests
+      WHERE tags = '{}'
+      LIMIT 30
+    `;
+    for (const row of untagged) {
+      const tags = await generateTags({ itemDescription: row.item_description, imageFileId: row.reference_image_file_id });
+      if (tags.length) {
+        await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${row.id}`;
+        newlyTagged += 1;
+      }
     }
 
     const persisted = await sql`
@@ -85,7 +117,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

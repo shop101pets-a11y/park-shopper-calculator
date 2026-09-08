@@ -1,4 +1,4 @@
-const { getGoogleAccessToken } = require('./_google');
+const { fetchDriveFile } = require('./_google');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -13,19 +13,7 @@ module.exports = async (req, res) => {
   }
 
   try {
-    const token = await getGoogleAccessToken();
-    const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
-      headers: { Authorization: `Bearer ${token}` },
-    });
-
-    if (!driveRes.ok) {
-      res.status(driveRes.status).json({ error: `Drive returned ${driveRes.status}` });
-      return;
-    }
-
-    const contentType = driveRes.headers.get('content-type') || 'image/jpeg';
-    const buffer = Buffer.from(await driveRes.arrayBuffer());
-
+    const { buffer, contentType } = await fetchDriveFile(fileId);
     res.setHeader('Content-Type', contentType);
     res.setHeader('Cache-Control', 'public, max-age=86400');
     res.status(200).send(buffer);

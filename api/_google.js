@@ -76,4 +76,17 @@ function extractDriveFileId(url) {
   return match ? match[0] : null;
 }
 
-module.exports = { getGoogleAccessToken, extractDriveFileId };
+async function fetchDriveFile(fileId) {
+  const token = await getGoogleAccessToken();
+  const driveRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?alt=media`, {
+    headers: { Authorization: `Bearer ${token}` },
+  });
+  if (!driveRes.ok) {
+    throw new Error(`Drive returned ${driveRes.status}`);
+  }
+  const contentType = driveRes.headers.get('content-type') || 'image/jpeg';
+  const buffer = Buffer.from(await driveRes.arrayBuffer());
+  return { buffer, contentType };
+}
+
+module.exports = { getGoogleAccessToken, extractDriveFileId, fetchDriveFile };
