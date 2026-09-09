@@ -376,10 +376,9 @@ header h1 {
 }
 
 .tag-cloud {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-  margin: 12px 0;
+  /* Tags stay functional (the search box below still filters by them) -
+     just not shown as a visible list of every tag in use. */
+  display: none;
 }
 
 .tag-chip {
