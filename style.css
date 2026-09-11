@@ -456,6 +456,70 @@ header h1 {
   font-size: 0.8rem;
 }
 
+.shopping-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.shopping-card {
+  border: 1px solid var(--border);
+  border-radius: 10px;
+  overflow: hidden;
+  background: var(--card);
+  display: flex;
+  flex-direction: column;
+}
+
+.card-photo {
+  display: block;
+  width: 100%;
+  aspect-ratio: 1 / 1;
+  background: var(--bg);
+}
+
+.card-thumb {
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  display: block;
+}
+
+.card-photo.no-photo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--muted);
+  font-size: 0.8rem;
+}
+
+.card-body {
+  padding: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.card-item {
+  font-size: 0.85rem;
+  line-height: 1.3;
+}
+
+.card-footer {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.card-footer select,
+.card-footer .tag-edit-input {
+  width: 100%;
+  padding: 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
 .view.hidden {
   display: none;
 }
@@ -624,5 +688,14 @@ header h1 {
 
   .weight-options {
     flex-direction: column;
+  }
+
+  .shopping-request-row {
+    grid-template-columns: 1fr;
+    gap: 6px;
+  }
+
+  .shopping-card-grid {
+    grid-template-columns: 1fr;
   }
 }

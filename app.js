@@ -600,10 +600,13 @@ function renderTracking(orders) {
 // --- Shopping List ---
 let shoppingRequests = [];
 let shoppingView = 'product';
+let shoppingDisplay = 'card';
 let shoppingTagFilter = '';
 
 const shoppingViewProductBtn = document.getElementById('shopping-view-product-btn');
 const shoppingViewCustomerBtn = document.getElementById('shopping-view-customer-btn');
+const shoppingDisplayCardBtn = document.getElementById('shopping-display-card-btn');
+const shoppingDisplayListBtn = document.getElementById('shopping-display-list-btn');
 const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
 const shoppingTagCloud = document.getElementById('shopping-tag-cloud');
 const shoppingListContent = document.getElementById('shopping-list-content');
@@ -653,6 +656,20 @@ shoppingTagFilterInput.addEventListener('input', () => {
   renderShoppingList();
 });
 
+shoppingDisplayCardBtn.addEventListener('click', () => {
+  shoppingDisplay = 'card';
+  shoppingDisplayCardBtn.classList.add('active');
+  shoppingDisplayListBtn.classList.remove('active');
+  renderShoppingList();
+});
+
+shoppingDisplayListBtn.addEventListener('click', () => {
+  shoppingDisplay = 'list';
+  shoppingDisplayListBtn.classList.add('active');
+  shoppingDisplayCardBtn.classList.remove('active');
+  renderShoppingList();
+});
+
 async function loadShoppingList() {
   try {
     const response = await fetch('/api/shopping-list');
@@ -696,6 +713,16 @@ function referenceImageProxyUrl(req) {
   return fileId ? `/api/drive-image?fileId=${fileId}` : null;
 }
 
+function statusOptionsHtml(req) {
+  return `
+    <option value="requested" ${req.status === 'requested' ? 'selected' : ''}>Requested</option>
+    <option value="found" ${req.status === 'found' ? 'selected' : ''}>Found</option>
+    <option value="sent" ${req.status === 'sent' ? 'selected' : ''}>Sent</option>
+    <option value="paid" ${req.status === 'paid' ? 'selected' : ''}>Paid</option>
+    <option value="purchased" ${req.status === 'purchased' ? 'selected' : ''}>Purchased</option>
+  `;
+}
+
 function requestRowHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
   const thumbUrl = referenceImageProxyUrl(req);
@@ -710,14 +737,32 @@ function requestRowHtml(req) {
   return `
     <div class="shopping-request-row" data-id="${req.id}">
       <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''}</div>
-      <select data-field="status">
-        <option value="requested" ${req.status === 'requested' ? 'selected' : ''}>Requested</option>
-        <option value="found" ${req.status === 'found' ? 'selected' : ''}>Found</option>
-        <option value="sent" ${req.status === 'sent' ? 'selected' : ''}>Sent</option>
-        <option value="paid" ${req.status === 'paid' ? 'selected' : ''}>Paid</option>
-        <option value="purchased" ${req.status === 'purchased' ? 'selected' : ''}>Purchased</option>
-      </select>
+      <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
+    </div>
+  `;
+}
+
+function requestCardHtml(req) {
+  const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
+  const thumbUrl = referenceImageProxyUrl(req);
+  const linkTarget = req.referenceImageUrl || thumbUrl;
+  const photo = thumbUrl
+    ? `<img src="${escapeHtml(thumbUrl)}" class="card-thumb" alt="reference photo" onerror="this.parentElement.classList.add('no-photo');this.replaceWith(Object.assign(document.createElement('span'),{textContent:'No photo'}))">`
+    : '';
+  const photoBlock = linkTarget
+    ? `<a class="card-photo${photo ? '' : ' no-photo'}" href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${photo || 'No photo'}</a>`
+    : `<div class="card-photo no-photo">No photo</div>`;
+  return `
+    <div class="shopping-card" data-id="${req.id}">
+      ${photoBlock}
+      <div class="card-body">
+        <div class="card-item">${details}</div>
+        <div class="card-footer">
+          <select data-field="status">${statusOptionsHtml(req)}</select>
+          <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
+        </div>
+      </div>
     </div>
   `;
 }
@@ -735,8 +780,13 @@ function renderShoppingList() {
   shoppingListEmptyState.style.display = filtered.length ? 'none' : 'block';
   shoppingListEmptyState.textContent = shoppingRequests.length ? 'No requests match that filter.' : 'No requests yet - import your form responses above.';
 
+  const isCard = shoppingDisplay === 'card';
+  const renderItems = (reqs) => isCard
+    ? `<div class="shopping-card-grid">${reqs.map(requestCardHtml).join('')}</div>`
+    : reqs.map(requestRowHtml).join('');
+
   if (shoppingView === 'product') {
-    shoppingListContent.innerHTML = filtered.map(requestRowHtml).join('');
+    shoppingListContent.innerHTML = renderItems(filtered);
     return;
   }
 
@@ -752,7 +802,7 @@ function renderShoppingList() {
         <span>${escapeHtml(customer)}</span>
         <span class="count-badge">${reqs.length} item${reqs.length > 1 ? 's' : ''}</span>
       </div>
-      ${reqs.map(requestRowHtml).join('')}
+      ${renderItems(reqs)}
     </div>
   `).join('');
 }
