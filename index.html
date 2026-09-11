@@ -198,37 +198,6 @@
         <p id="shopping-sync-error" class="payment-link-error" style="display:none;"></p>
       </section>
 
-      <section class="import-section">
-        <h2>Or import a downloaded export (.xlsx)</h2>
-        <p class="import-hint">Fallback if the Sheets sync isn't set up yet. Parsing this form's branching structure is best-effort - review and fix each row below before importing.</p>
-        <div class="import-controls">
-          <input type="file" id="shopping-import-file-input" accept=".xlsx,.csv">
-          <button id="shopping-preview-import-btn" class="btn-add" type="button" disabled>Preview import</button>
-        </div>
-        <p id="shopping-import-error" class="payment-link-error" style="display:none;"></p>
-        <div id="shopping-import-preview" class="import-preview" style="display:none;">
-          <div class="table-scroll">
-            <table class="finance-table">
-              <thead>
-                <tr>
-                  <th>Import?</th>
-                  <th>Customer</th>
-                  <th>Phone</th>
-                  <th>Email</th>
-                  <th>Instagram</th>
-                  <th>Prefer</th>
-                  <th>Item</th>
-                  <th>Qty</th>
-                  <th>Size</th>
-                </tr>
-              </thead>
-              <tbody id="shopping-import-table-body"></tbody>
-            </table>
-          </div>
-          <button id="shopping-confirm-import-btn" class="btn-add" type="button">Confirm import</button>
-        </div>
-      </section>
-
       <section class="finance-table-section">
         <div class="finance-table-header">
           <h2>Shopping List</h2>

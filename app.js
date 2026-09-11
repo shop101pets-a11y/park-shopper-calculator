@@ -599,16 +599,9 @@ function renderTracking(orders) {
 
 // --- Shopping List ---
 let shoppingRequests = [];
-let shoppingImportCandidates = [];
 let shoppingView = 'product';
 let shoppingTagFilter = '';
 
-const shoppingImportFileInput = document.getElementById('shopping-import-file-input');
-const shoppingPreviewImportBtn = document.getElementById('shopping-preview-import-btn');
-const shoppingImportError = document.getElementById('shopping-import-error');
-const shoppingImportPreview = document.getElementById('shopping-import-preview');
-const shoppingImportTableBody = document.getElementById('shopping-import-table-body');
-const shoppingConfirmImportBtn = document.getElementById('shopping-confirm-import-btn');
 const shoppingViewProductBtn = document.getElementById('shopping-view-product-btn');
 const shoppingViewCustomerBtn = document.getElementById('shopping-view-customer-btn');
 const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
@@ -640,110 +633,6 @@ shoppingSyncBtn.addEventListener('click', async () => {
   }
 });
 
-shoppingImportFileInput.addEventListener('change', () => {
-  shoppingPreviewImportBtn.disabled = !shoppingImportFileInput.files.length;
-  shoppingImportPreview.style.display = 'none';
-  shoppingImportError.style.display = 'none';
-});
-
-shoppingPreviewImportBtn.addEventListener('click', async () => {
-  const file = shoppingImportFileInput.files[0];
-  if (!file) return;
-
-  shoppingImportError.style.display = 'none';
-  shoppingPreviewImportBtn.disabled = true;
-  shoppingPreviewImportBtn.textContent = 'Reading file...';
-
-  try {
-    const fileBase64 = await readFileAsBase64(file);
-    const response = await fetch('/api/shopping-list-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'preview', fileBase64 }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-    }
-
-    shoppingImportCandidates = data.candidates.map((c) => ({ ...c, include: true }));
-    renderShoppingImportPreview();
-  } catch (err) {
-    shoppingImportError.textContent = `Couldn't preview import: ${err.message}`;
-    shoppingImportError.style.display = 'block';
-  } finally {
-    shoppingPreviewImportBtn.disabled = false;
-    shoppingPreviewImportBtn.textContent = 'Preview import';
-  }
-});
-
-function renderShoppingImportPreview() {
-  shoppingImportTableBody.innerHTML = shoppingImportCandidates.map((c, index) => `
-    <tr class="${c.needsSplitting || c.unparsed ? 'flagged-row' : ''}" data-index="${index}">
-      <td><input type="checkbox" data-field="include" ${c.include ? 'checked' : ''}></td>
-      <td><input type="text" data-field="customer" value="${escapeHtml(c.customer || '')}"></td>
-      <td><input type="text" data-field="phone" value="${escapeHtml(c.phone || '')}"></td>
-      <td><input type="text" data-field="email" value="${escapeHtml(c.email || '')}"></td>
-      <td><input type="text" data-field="instagram" value="${escapeHtml(c.instagram || '')}"></td>
-      <td>
-        <select data-field="contactPreference">
-          <option value="phone" ${c.contactPreference === 'phone' ? 'selected' : ''}>Phone</option>
-          <option value="email" ${c.contactPreference === 'email' ? 'selected' : ''}>Email</option>
-          <option value="instagram" ${c.contactPreference === 'instagram' ? 'selected' : ''}>Instagram</option>
-        </select>
-      </td>
-      <td><input type="text" data-field="item" value="${escapeHtml(c.item || '')}"></td>
-      <td><input type="number" min="1" data-field="quantity" value="${c.quantity || 1}"></td>
-      <td><input type="text" data-field="size" value="${escapeHtml(c.size || '')}"></td>
-    </tr>
-  `).join('');
-  shoppingImportPreview.style.display = shoppingImportCandidates.length ? 'block' : 'none';
-}
-
-shoppingImportTableBody.addEventListener('change', (e) => {
-  const field = e.target.dataset.field;
-  if (!field) return;
-  const index = Number(e.target.closest('tr').dataset.index);
-  const candidate = shoppingImportCandidates[index];
-  if (!candidate) return;
-
-  if (field === 'include') candidate.include = e.target.checked;
-  else if (field === 'quantity') candidate.quantity = parseInt(e.target.value, 10) || 1;
-  else candidate[field] = e.target.value;
-});
-
-shoppingConfirmImportBtn.addEventListener('click', async () => {
-  const toImport = shoppingImportCandidates.filter((c) => c.include && c.item && c.item.trim());
-  if (!toImport.length) return;
-
-  shoppingImportError.style.display = 'none';
-  shoppingConfirmImportBtn.disabled = true;
-  shoppingConfirmImportBtn.textContent = 'Importing...';
-
-  try {
-    const response = await fetch('/api/shopping-list-import', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ mode: 'apply', requests: toImport }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-    }
-
-    shoppingImportCandidates = [];
-    shoppingImportPreview.style.display = 'none';
-    shoppingImportFileInput.value = '';
-    shoppingPreviewImportBtn.disabled = true;
-    await loadShoppingList();
-  } catch (err) {
-    shoppingImportError.textContent = `Couldn't import: ${err.message}`;
-    shoppingImportError.style.display = 'block';
-  } finally {
-    shoppingConfirmImportBtn.disabled = false;
-    shoppingConfirmImportBtn.textContent = 'Confirm import';
-  }
-});
 
 shoppingViewProductBtn.addEventListener('click', () => {
   shoppingView = 'product';

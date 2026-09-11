@@ -456,27 +456,6 @@ header h1 {
   font-size: 0.8rem;
 }
 
-.import-preview input[type="text"],
-.import-preview input[type="number"] {
-  width: 100%;
-  min-width: 70px;
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.8rem;
-}
-
-.import-preview select {
-  padding: 4px 6px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.8rem;
-}
-
-.flagged-row {
-  background: #fffbeb;
-}
-
 .view.hidden {
   display: none;
 }
