@@ -130,6 +130,11 @@ async function ensureSchema(sql) {
   // The price the shopper found the item for in-store - set once it's
   // found, used to highlight found-and-priced cards in the UI.
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS price NUMERIC`;
+
+  // Set on every item included in a generated payment link, so a later
+  // "refresh from Square" can look up that order's payment status and mark
+  // the matching rows paid automatically.
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS square_order_id TEXT`;
 }
 
 function rowToJson(row) {
@@ -170,6 +175,7 @@ function shoppingRequestToJson(row) {
     tags: row.tags || [],
     status: row.status,
     price: row.price === null || row.price === undefined ? null : Number(row.price),
+    squareOrderId: row.square_order_id,
     notes: row.notes,
     submittedAt: row.submitted_at,
   };

@@ -10,6 +10,7 @@ const PATCHABLE_COLUMNS = {
   contactInstagram: 'contact_instagram',
   contactPreference: 'contact_preference',
   price: 'price',
+  squareOrderId: 'square_order_id',
 };
 
 module.exports = async (req, res) => {
@@ -68,6 +69,9 @@ module.exports = async (req, res) => {
           updated = await sql`UPDATE shopping_requests SET price = ${price} WHERE id = ${id} RETURNING *`;
           break;
         }
+        case 'squareOrderId':
+          updated = await sql`UPDATE shopping_requests SET square_order_id = ${value} WHERE id = ${id} RETURNING *`;
+          break;
       }
 
       if (!updated.length) {

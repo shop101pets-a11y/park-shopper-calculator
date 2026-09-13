@@ -117,7 +117,7 @@ module.exports = async (req, res) => {
       return;
     }
 
-    res.status(200).json({ url: data.payment_link.url });
+    res.status(200).json({ url: data.payment_link.url, orderId: data.payment_link.order_id });
   } catch (err) {
     res.status(500).json({ error: err.message });
   }

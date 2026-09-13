@@ -616,6 +616,7 @@ const shoppingListContent = document.getElementById('shopping-list-content');
 const shoppingListEmptyState = document.getElementById('shopping-list-empty-state');
 const shoppingSyncBtn = document.getElementById('shopping-sync-btn');
 const shoppingSyncError = document.getElementById('shopping-sync-error');
+const shoppingSquareRefreshBtn = document.getElementById('shopping-square-refresh-btn');
 
 shoppingSyncBtn.addEventListener('click', async () => {
   shoppingSyncError.style.display = 'none';
@@ -636,6 +637,28 @@ shoppingSyncBtn.addEventListener('click', async () => {
   } finally {
     shoppingSyncBtn.disabled = false;
     shoppingSyncBtn.textContent = 'Sync from Google Form';
+  }
+});
+
+shoppingSquareRefreshBtn.addEventListener('click', async () => {
+  shoppingSyncError.style.display = 'none';
+  shoppingSquareRefreshBtn.disabled = true;
+  shoppingSquareRefreshBtn.textContent = 'Checking Square...';
+
+  try {
+    const response = await fetch('/api/refresh-square-payments');
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    shoppingRequests = data.requests;
+    renderShoppingList();
+  } catch (err) {
+    shoppingSyncError.textContent = `Couldn't check Square: ${err.message}`;
+    shoppingSyncError.style.display = 'block';
+  } finally {
+    shoppingSquareRefreshBtn.disabled = false;
+    shoppingSquareRefreshBtn.textContent = 'Refresh from Square';
   }
 });
 
@@ -735,6 +758,12 @@ function isFoundAndPriced(req) {
   return req.status === 'found' && req.price !== null && req.price !== undefined && req.price !== '';
 }
 
+function statusHighlightClass(req) {
+  if (req.status === 'paid') return ' status-paid';
+  if (isFoundAndPriced(req)) return ' found-priced';
+  return '';
+}
+
 function priceInputHtml(req) {
   return `<input type="number" step="0.01" min="0" class="price-input" data-field="price" placeholder="Price" value="${req.price === null || req.price === undefined ? '' : req.price}">`;
 }
@@ -751,7 +780,7 @@ function requestRowHtml(req) {
       }</a>`
     : '';
   return `
-    <div class="shopping-request-row${isFoundAndPriced(req) ? ' found-priced' : ''}" data-id="${req.id}">
+    <div class="shopping-request-row${statusHighlightClass(req)}" data-id="${req.id}">
       <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''}</div>
       <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
@@ -771,7 +800,7 @@ function requestCardHtml(req) {
     ? `<a class="card-photo${photo ? '' : ' no-photo'}" href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${photo || 'No photo'}</a>`
     : `<div class="card-photo no-photo">No photo</div>`;
   return `
-    <div class="shopping-card${isFoundAndPriced(req) ? ' found-priced' : ''}" data-id="${req.id}">
+    <div class="shopping-card${statusHighlightClass(req)}" data-id="${req.id}">
       ${photoBlock}
       <div class="card-body">
         <div class="card-item">${details}</div>
@@ -1010,6 +1039,25 @@ shoppingListContent.addEventListener('click', async (e) => {
       throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
     }
     state.linkUrl = data.url;
+
+    // Tag every included item with this order's id so "Refresh from Square"
+    // can later look up its payment status and mark them paid automatically.
+    // Best-effort: if a tag fails to save, the link is still valid and
+    // already shown - that item just won't auto-update from a refresh.
+    if (data.orderId) {
+      await Promise.all(selectedItems.map(async (r) => {
+        try {
+          await fetch('/api/shopping-list', {
+            method: 'PATCH',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ id: r.id, field: 'squareOrderId', value: data.orderId }),
+          });
+          r.squareOrderId = data.orderId;
+        } catch {
+          // ignored - see comment above
+        }
+      }));
+    }
   } catch (err) {
     state.error = `Couldn't create payment link: ${err.message}`;
   } finally {
