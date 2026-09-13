@@ -603,6 +603,7 @@ let shoppingView = 'product';
 let shoppingDisplay = 'card';
 let shoppingTagFilter = '';
 let shoppingStatusFilter = '';
+let customerLinkState = {};
 
 const shoppingViewProductBtn = document.getElementById('shopping-view-product-btn');
 const shoppingViewCustomerBtn = document.getElementById('shopping-view-customer-btn');
@@ -784,6 +785,72 @@ function requestCardHtml(req) {
   `;
 }
 
+// Per-customer UI state for the payment-link panel in the By Customer view -
+// which items are checked, which shipping option is picked, and any
+// generated link/error. Kept outside shoppingRequests since it's ephemeral
+// UI state, not data to persist. Selection is seeded once per customer (to
+// the items already found-and-priced, i.e. ready to send) and left alone on
+// later re-renders so the shopper's own checkbox choices aren't reset every
+// time something else on the page changes.
+function getCustomerLinkState(customer, reqs) {
+  if (!customerLinkState[customer]) {
+    customerLinkState[customer] = {
+      selected: new Set(reqs.filter(isFoundAndPriced).map((r) => r.id)),
+      weight: 'normal',
+      linkUrl: null,
+      warning: null,
+      error: null,
+      generating: false,
+    };
+  }
+  return customerLinkState[customer];
+}
+
+function customerPaymentPanelHtml(customer, reqs, idx) {
+  const state = getCustomerLinkState(customer, reqs);
+  const weightName = `link-weight-${idx}`;
+
+  const itemRows = reqs.map((r) => {
+    const hasPrice = r.price !== null && r.price !== undefined;
+    return `
+      <label class="link-item-row${hasPrice ? '' : ' no-price'}">
+        <input type="checkbox" class="link-item-checkbox" data-link-item="${r.id}" ${state.selected.has(r.id) ? 'checked' : ''}>
+        <span class="link-item-name">${escapeHtml(r.item)}${r.quantity > 1 ? ` x${r.quantity}` : ''}</span>
+        <span class="link-item-price">${hasPrice ? formatMoney(r.price) : 'no price'}</span>
+      </label>
+    `;
+  }).join('');
+
+  const weightOption = (value, label, fee) => `
+    <label class="weight-option">
+      <input type="radio" name="${weightName}" value="${value}" ${state.weight === value ? 'checked' : ''}>
+      <span>${label} <em>${fee}</em></span>
+    </label>
+  `;
+
+  return `
+    <div class="shopping-group-payment" data-customer="${escapeHtml(customer)}">
+      <h3 class="payment-panel-title">Payment link</h3>
+      <div class="link-item-list">${itemRows}</div>
+      <div class="weight-options weight-options-compact">
+        ${weightOption('light', 'Light', '$7.75')}
+        ${weightOption('normal', 'Normal', '$8.35')}
+        ${weightOption('heavy', 'Heavy', '$9.86')}
+        ${weightOption('none', 'Already charged', '$0')}
+      </div>
+      <button type="button" class="btn-add btn-full generate-link-btn" ${state.generating ? 'disabled' : ''}>${state.generating ? 'Creating link...' : 'Generate payment link'}</button>
+      ${state.warning ? `<p class="payment-link-error">${escapeHtml(state.warning)}</p>` : ''}
+      ${state.error ? `<p class="payment-link-error">${escapeHtml(state.error)}</p>` : ''}
+      ${state.linkUrl ? `
+        <div class="payment-link-result" style="display:flex;">
+          <input type="text" class="generated-link-input" value="${escapeHtml(state.linkUrl)}" readonly>
+          <button type="button" class="btn-copy copy-generated-link-btn">Copy link</button>
+        </div>
+      ` : ''}
+    </div>
+  `;
+}
+
 function renderShoppingList() {
   renderTagCloud();
 
@@ -814,13 +881,16 @@ function renderShoppingList() {
     byCustomer.get(r.customer).push(r);
   });
 
-  shoppingListContent.innerHTML = [...byCustomer.entries()].map(([customer, reqs]) => `
+  shoppingListContent.innerHTML = [...byCustomer.entries()].map(([customer, reqs], idx) => `
     <div class="shopping-group">
       <div class="shopping-group-title">
         <span>${escapeHtml(customer)}</span>
         <span class="count-badge">${reqs.length} item${reqs.length > 1 ? 's' : ''}</span>
       </div>
-      ${renderItems(reqs)}
+      <div class="shopping-group-split">
+        <div class="shopping-group-items">${renderItems(reqs)}</div>
+        ${customerPaymentPanelHtml(customer, reqs, idx)}
+      </div>
     </div>
   `).join('');
 }
@@ -857,6 +927,94 @@ shoppingListContent.addEventListener('change', async (e) => {
     renderShoppingList();
     shoppingListEmptyState.textContent = `Couldn't save change: ${err.message}`;
     shoppingListEmptyState.style.display = 'block';
+  }
+});
+
+shoppingListContent.addEventListener('change', (e) => {
+  const checkbox = e.target.closest('.link-item-checkbox');
+  if (checkbox) {
+    const customer = e.target.closest('.shopping-group-payment').dataset.customer;
+    const state = customerLinkState[customer];
+    const itemId = Number(checkbox.dataset.linkItem);
+    const req = shoppingRequests.find((r) => r.id === itemId);
+
+    if (checkbox.checked && (!req || req.price === null || req.price === undefined)) {
+      checkbox.checked = false;
+      state.warning = `Set a price for "${req ? req.item : 'that item'}" before including it.`;
+      renderShoppingList();
+      return;
+    }
+
+    if (checkbox.checked) state.selected.add(itemId);
+    else state.selected.delete(itemId);
+    state.warning = null;
+    return;
+  }
+
+  const weightRadio = e.target.closest('.shopping-group-payment input[type="radio"]');
+  if (weightRadio) {
+    const customer = e.target.closest('.shopping-group-payment').dataset.customer;
+    customerLinkState[customer].weight = weightRadio.value;
+  }
+});
+
+shoppingListContent.addEventListener('click', async (e) => {
+  const copyGeneratedBtn = e.target.closest('.copy-generated-link-btn');
+  if (copyGeneratedBtn) {
+    const panel = e.target.closest('.shopping-group-payment');
+    const input = panel.querySelector('.generated-link-input');
+    if (input && input.value) {
+      await copyText(input.value);
+      copyGeneratedBtn.textContent = 'Copied!';
+      setTimeout(() => { copyGeneratedBtn.textContent = 'Copy link'; }, 1500);
+    }
+    return;
+  }
+
+  const generateBtn = e.target.closest('.generate-link-btn');
+  if (!generateBtn) return;
+
+  const customer = e.target.closest('.shopping-group-payment').dataset.customer;
+  const state = customerLinkState[customer];
+  const selectedItems = shoppingRequests.filter((r) => r.customer === customer && state.selected.has(r.id));
+
+  if (!selectedItems.length) {
+    state.error = 'Select at least one item to include.';
+    renderShoppingList();
+    return;
+  }
+  const missingPrice = selectedItems.find((r) => r.price === null || r.price === undefined);
+  if (missingPrice) {
+    state.error = `"${missingPrice.item}" needs a price before generating a link.`;
+    renderShoppingList();
+    return;
+  }
+
+  state.error = null;
+  state.warning = null;
+  state.linkUrl = null;
+  state.generating = true;
+  renderShoppingList();
+
+  try {
+    const response = await fetch('/api/create-payment-link', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        items: selectedItems.map((r) => ({ name: r.item, price: r.price, quantity: r.quantity })),
+        packageWeight: state.weight,
+      }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    state.linkUrl = data.url;
+  } catch (err) {
+    state.error = `Couldn't create payment link: ${err.message}`;
+  } finally {
+    state.generating = false;
+    renderShoppingList();
   }
 });
 
