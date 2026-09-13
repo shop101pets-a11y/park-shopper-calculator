@@ -96,9 +96,15 @@ function parseFormRows(headers, rows, submittedAtOf) {
   const candidates = [];
 
   rows.forEach((row, rowIndex) => {
-    const contact = parseContact(contactHeader ? row[contactHeader] : null);
-    const contactPreference = (preferenceHeader && normalizePreference(row[preferenceHeader]))
-      || guessContactPreference(contact);
+    // Newer responses leave the dedicated contact column blank and put the
+    // actual phone/email/instagram text in the "Preferred communication?"
+    // answer instead (e.g. "Instagram @handle", "Call/text 201-805-6942") -
+    // so fall back to parsing that free text when the contact column is empty.
+    const rawContact = (contactHeader && row[contactHeader])
+      || (preferenceHeader && row[preferenceHeader])
+      || null;
+    const contact = parseContact(rawContact);
+    const contactPreference = normalizePreference(rawContact) || guessContactPreference(contact);
     const notes = notesHeader ? row[notesHeader] : null;
     const submittedAt = submittedAtOf(row);
 
