@@ -9,17 +9,28 @@
 // is edited), we scan the header row for "Item N of M" columns and pull
 // each one's image/quantity/size from the next few columns *positionally*
 // (that adjacency held consistently across every branch inspected).
-// Contact info and notes have no real field label in this form's export
-// (Google shows them as "Column 30" / a comments column), so those are
-// matched by their literal header text instead.
-
+// The contact field has no real question title in this form, so Google
+// exports it as "Column N" where N is whatever position it currently sits
+// at - that shifts any time a question is added/removed from the form (it
+// moved from "Column 30" to "Column 44" after one such edit), so it's
+// matched by that generic pattern rather than a hardcoded column number.
 const ITEM_HEADER_RE = /^Item \d+ of \d+/;
 const IMAGE_HEADER_RE = /image|picture/i;
 const QUANTITY_HEADER_RE = /quantity/i;
 const SIZE_HEADER_RE = /size/i;
 const OVERFLOW_HEADER_RE = /please add description of items/i;
-const CONTACT_HEADER = 'Column 30';
+const CONTACT_HEADER_RE = /^Column \d+$/;
+const CONTACT_PREFERENCE_HEADER_RE = /preferred communication/i;
 const NOTES_HEADER_RE = /questions.*comments|comments.*feedback|feeback/i;
+
+function normalizePreference(raw) {
+  if (!raw || !String(raw).trim()) return null;
+  const text = String(raw).toLowerCase();
+  if (/email/.test(text)) return 'email';
+  if (/instagram|tiktok|\bIG\b/i.test(text)) return 'instagram';
+  if (/phone|call|text/.test(text)) return 'phone';
+  return null;
+}
 
 function findItemGroups(headers) {
   const groups = [];
@@ -78,12 +89,16 @@ function guessContactPreference({ phone, email, instagram }) {
 function parseFormRows(headers, rows, submittedAtOf) {
   const itemGroups = findItemGroups(headers);
   const overflowHeaders = headers.filter((h) => h && OVERFLOW_HEADER_RE.test(h));
+  const contactHeader = headers.find((h) => h && CONTACT_HEADER_RE.test(h));
+  const preferenceHeader = headers.find((h) => h && CONTACT_PREFERENCE_HEADER_RE.test(h));
   const notesHeader = headers.find((h) => h && NOTES_HEADER_RE.test(h));
 
   const candidates = [];
 
   rows.forEach((row, rowIndex) => {
-    const contact = parseContact(row[CONTACT_HEADER]);
+    const contact = parseContact(contactHeader ? row[contactHeader] : null);
+    const contactPreference = (preferenceHeader && normalizePreference(row[preferenceHeader]))
+      || guessContactPreference(contact);
     const notes = notesHeader ? row[notesHeader] : null;
     const submittedAt = submittedAtOf(row);
 
@@ -100,7 +115,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         phone: contact.phone,
         email: contact.email,
         instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
+        contactPreference,
         item: String(itemName).trim(),
         quantity: Number(group.quantityHeader ? row[group.quantityHeader] : 1) || 1,
         size: group.sizeHeader ? row[group.sizeHeader] : null,
@@ -123,7 +138,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         phone: contact.phone,
         email: contact.email,
         instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
+        contactPreference,
         item: String(text).trim(),
         quantity: 1,
         size: null,
@@ -141,7 +156,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         phone: contact.phone,
         email: contact.email,
         instagram: contact.instagram,
-        contactPreference: guessContactPreference(contact),
+        contactPreference,
         item: '',
         quantity: 1,
         size: null,
