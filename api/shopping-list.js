@@ -9,6 +9,7 @@ const PATCHABLE_COLUMNS = {
   contactEmail: 'contact_email',
   contactInstagram: 'contact_instagram',
   contactPreference: 'contact_preference',
+  price: 'price',
 };
 
 module.exports = async (req, res) => {
@@ -58,6 +59,15 @@ module.exports = async (req, res) => {
         case 'contactPreference':
           updated = await sql`UPDATE shopping_requests SET contact_preference = ${value} WHERE id = ${id} RETURNING *`;
           break;
+        case 'price': {
+          const price = value === '' || value === null || value === undefined ? null : Number(value);
+          if (price !== null && !Number.isFinite(price)) {
+            res.status(400).json({ error: 'price must be a number' });
+            return;
+          }
+          updated = await sql`UPDATE shopping_requests SET price = ${price} WHERE id = ${id} RETURNING *`;
+          break;
+        }
       }
 
       if (!updated.length) {

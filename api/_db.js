@@ -126,6 +126,10 @@ async function ensureSchema(sql) {
     SET submitted_at = date_trunc('minute', submitted_at)
     WHERE submitted_at IS NOT NULL AND submitted_at <> date_trunc('minute', submitted_at)
   `;
+
+  // The price the shopper found the item for in-store - set once it's
+  // found, used to highlight found-and-priced cards in the UI.
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS price NUMERIC`;
 }
 
 function rowToJson(row) {
@@ -165,6 +169,7 @@ function shoppingRequestToJson(row) {
     referenceImageFileId: row.reference_image_file_id,
     tags: row.tags || [],
     status: row.status,
+    price: row.price === null || row.price === undefined ? null : Number(row.price),
     notes: row.notes,
     submittedAt: row.submitted_at,
   };

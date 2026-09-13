@@ -602,12 +602,14 @@ let shoppingRequests = [];
 let shoppingView = 'product';
 let shoppingDisplay = 'card';
 let shoppingTagFilter = '';
+let shoppingStatusFilter = '';
 
 const shoppingViewProductBtn = document.getElementById('shopping-view-product-btn');
 const shoppingViewCustomerBtn = document.getElementById('shopping-view-customer-btn');
 const shoppingDisplayCardBtn = document.getElementById('shopping-display-card-btn');
 const shoppingDisplayListBtn = document.getElementById('shopping-display-list-btn');
 const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
+const shoppingStatusFilterSelect = document.getElementById('shopping-status-filter');
 const shoppingTagCloud = document.getElementById('shopping-tag-cloud');
 const shoppingListContent = document.getElementById('shopping-list-content');
 const shoppingListEmptyState = document.getElementById('shopping-list-empty-state');
@@ -653,6 +655,11 @@ shoppingViewCustomerBtn.addEventListener('click', () => {
 
 shoppingTagFilterInput.addEventListener('input', () => {
   shoppingTagFilter = shoppingTagFilterInput.value.trim().toLowerCase();
+  renderShoppingList();
+});
+
+shoppingStatusFilterSelect.addEventListener('change', () => {
+  shoppingStatusFilter = shoppingStatusFilterSelect.value;
   renderShoppingList();
 });
 
@@ -723,6 +730,14 @@ function statusOptionsHtml(req) {
   `;
 }
 
+function isFoundAndPriced(req) {
+  return req.status === 'found' && req.price !== null && req.price !== undefined && req.price !== '';
+}
+
+function priceInputHtml(req) {
+  return `<input type="number" step="0.01" min="0" class="price-input" data-field="price" placeholder="Price" value="${req.price === null || req.price === undefined ? '' : req.price}">`;
+}
+
 function requestRowHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
   const thumbUrl = referenceImageProxyUrl(req);
@@ -735,10 +750,11 @@ function requestRowHtml(req) {
       }</a>`
     : '';
   return `
-    <div class="shopping-request-row" data-id="${req.id}">
+    <div class="shopping-request-row${isFoundAndPriced(req) ? ' found-priced' : ''}" data-id="${req.id}">
       <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''}</div>
       <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
+      ${priceInputHtml(req)}
     </div>
   `;
 }
@@ -754,13 +770,14 @@ function requestCardHtml(req) {
     ? `<a class="card-photo${photo ? '' : ' no-photo'}" href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${photo || 'No photo'}</a>`
     : `<div class="card-photo no-photo">No photo</div>`;
   return `
-    <div class="shopping-card" data-id="${req.id}">
+    <div class="shopping-card${isFoundAndPriced(req) ? ' found-priced' : ''}" data-id="${req.id}">
       ${photoBlock}
       <div class="card-body">
         <div class="card-item">${details}</div>
         <div class="card-footer">
           <select data-field="status">${statusOptionsHtml(req)}</select>
           <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
+          ${priceInputHtml(req)}
         </div>
       </div>
     </div>
@@ -771,6 +788,7 @@ function renderShoppingList() {
   renderTagCloud();
 
   const filtered = shoppingRequests.filter((r) => {
+    if (shoppingStatusFilter && r.status !== shoppingStatusFilter) return false;
     if (!shoppingTagFilter) return true;
     const inTags = r.tags.some((t) => t.toLowerCase().includes(shoppingTagFilter));
     const inItem = r.item.toLowerCase().includes(shoppingTagFilter);
@@ -814,13 +832,15 @@ shoppingListContent.addEventListener('change', async (e) => {
   const req = shoppingRequests.find((r) => r.id === id);
   if (!req) return;
 
-  const value = field === 'tags'
+  let value = field === 'tags'
     ? e.target.value.split(',').map((t) => t.trim()).filter(Boolean)
     : e.target.value;
+  if (field === 'price') value = value === '' ? null : Number(value);
 
   const previousValue = req[field];
   req[field] = value;
   if (field === 'tags') renderTagCloud();
+  if (field === 'price' || field === 'status') renderShoppingList();
 
   try {
     const response = await fetch('/api/shopping-list', {

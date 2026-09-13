@@ -375,6 +375,14 @@ header h1 {
   font-size: 0.9rem;
 }
 
+#shopping-status-filter {
+  padding: 9px 10px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.9rem;
+  background: var(--card);
+}
+
 .tag-cloud {
   /* Tags stay functional (the search box below still filters by them) -
      just not shown as a visible list of every tag in use. */
@@ -428,7 +436,7 @@ header h1 {
 
 .shopping-request-row {
   display: grid;
-  grid-template-columns: 1fr 120px 160px;
+  grid-template-columns: 1fr 120px 160px 90px;
   gap: 10px;
   align-items: center;
   padding: 8px 0;
@@ -454,6 +462,26 @@ header h1 {
   border: 1px solid var(--border);
   border-radius: 6px;
   font-size: 0.8rem;
+}
+
+.price-input {
+  width: 100%;
+  padding: 4px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.8rem;
+}
+
+.shopping-request-row.found-priced,
+.shopping-card.found-priced {
+  background: #dbeafe;
+  border-color: #60a5fa;
+}
+
+.shopping-request-row.found-priced {
+  border-radius: 8px;
+  padding-left: 8px;
+  padding-right: 8px;
 }
 
 .shopping-card-grid {
@@ -512,7 +540,8 @@ header h1 {
 }
 
 .card-footer select,
-.card-footer .tag-edit-input {
+.card-footer .tag-edit-input,
+.card-footer .price-input {
   width: 100%;
   padding: 6px;
   border: 1px solid var(--border);
