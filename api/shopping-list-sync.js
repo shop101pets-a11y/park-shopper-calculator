@@ -67,7 +67,6 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     let newlyTagged = 0;
-    let contactsFixed = 0;
 
     for (const r of candidates) {
       const fileId = extractDriveFileId(r.referenceImageUrl);
@@ -91,22 +90,6 @@ module.exports = async (req, res) => {
           await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${inserted[0].id}`;
           newlyTagged += 1;
         }
-      } else if (r.customer !== 'Unknown') {
-        // A duplicate hit by ON CONFLICT may already exist with stale/wrong
-        // contact info from before a parser fix (e.g. contact info moving to
-        // a different form column, or a since-changed name-extraction rule).
-        // Keep it in sync with what the parser produces now - never with a
-        // worse ('Unknown') value, but always overwrite an out-of-date one.
-        const fixed = await sql`
-          UPDATE shopping_requests
-          SET customer = ${r.customer}, contact_phone = ${r.phone || null},
-              contact_email = ${r.email || null}, contact_instagram = ${r.instagram || null},
-              contact_preference = ${r.contactPreference}
-          WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
-            AND customer IS DISTINCT FROM ${r.customer}
-          RETURNING id
-        `;
-        if (fixed.length) contactsFixed += 1;
       }
     }
 
@@ -134,7 +117,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, contactsFixed },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
