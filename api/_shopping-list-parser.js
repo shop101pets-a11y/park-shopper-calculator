@@ -53,7 +53,11 @@ function parseContact(raw) {
   if (!raw || !String(raw).trim()) {
     return { customer: 'Unknown', phone: null, email: null, instagram: null };
   }
-  let text = String(raw).trim();
+  // Show the customer's own full answer verbatim rather than whatever
+  // fragment is left after stripping out the phone/email/instagram bits -
+  // "Text please! 908-798-1550" reads better as itself than as "Text please!".
+  const customer = String(raw).trim();
+  let text = customer;
 
   const emailMatch = text.match(/[\w.+-]+@[\w-]+\.[\w.-]+/);
   const email = emailMatch ? emailMatch[0] : null;
@@ -66,11 +70,7 @@ function parseContact(raw) {
   let instagram = null;
   if (/instagram|tiktok|\bIG\b/i.test(text)) {
     instagram = text.replace(/instagram|tiktok|\bIG\b/gi, '').replace(/[:@]/g, ' ').replace(/\s+/g, ' ').trim();
-    text = '';
   }
-
-  const nameGuess = text.replace(/^[\s\-:,]+|[\s\-:,]+$/g, '').replace(/\s+/g, ' ').trim();
-  const customer = nameGuess || instagram || email || phone || 'Unknown';
 
   return { customer, phone, email, instagram: instagram || null };
 }
