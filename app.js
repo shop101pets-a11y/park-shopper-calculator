@@ -785,6 +785,7 @@ function requestRowHtml(req) {
       <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
       ${priceInputHtml(req)}
+      <button type="button" class="btn-delete-request" data-id="${req.id}" title="Delete">&times;</button>
     </div>
   `;
 }
@@ -801,6 +802,7 @@ function requestCardHtml(req) {
     : `<div class="card-photo no-photo">No photo</div>`;
   return `
     <div class="shopping-card${statusHighlightClass(req)}" data-id="${req.id}">
+      <button type="button" class="btn-delete-request btn-delete-card" data-id="${req.id}" title="Delete">&times;</button>
       ${photoBlock}
       <div class="card-body">
         <div class="card-item">${details}</div>
@@ -988,6 +990,36 @@ shoppingListContent.addEventListener('change', (e) => {
 });
 
 shoppingListContent.addEventListener('click', async (e) => {
+  const deleteBtn = e.target.closest('.btn-delete-request');
+  if (deleteBtn) {
+    const id = Number(deleteBtn.dataset.id);
+    const req = shoppingRequests.find((r) => r.id === id);
+    if (!req) return;
+    if (!confirm(`Delete "${req.item}"${req.customer ? ` (${req.customer})` : ''}? This can't be undone. Finances data is not affected.`)) {
+      return;
+    }
+
+    deleteBtn.disabled = true;
+    try {
+      const response = await fetch('/api/shopping-list', {
+        method: 'DELETE',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      }
+      shoppingRequests = shoppingRequests.filter((r) => r.id !== id);
+      renderShoppingList();
+    } catch (err) {
+      deleteBtn.disabled = false;
+      shoppingListEmptyState.textContent = `Couldn't delete: ${err.message}`;
+      shoppingListEmptyState.style.display = 'block';
+    }
+    return;
+  }
+
   const copyGeneratedBtn = e.target.closest('.copy-generated-link-btn');
   if (copyGeneratedBtn) {
     const panel = e.target.closest('.shopping-group-payment');
