@@ -529,7 +529,7 @@ finishPackingBtn.addEventListener('click', async () => {
   const checkedRows = [...trackingTableBody.querySelectorAll('.packed-checkbox:checked')];
   if (!checkedRows.length) return;
 
-  if (!confirm(`Finish packing ${checkedRows.length} order${checkedRows.length > 1 ? 's' : ''}? They'll be removed from this list (Finances keeps all their data).`)) {
+  if (!confirm(`Finish packing ${checkedRows.length} order${checkedRows.length > 1 ? 's' : ''}? They'll be removed from this list (Finances keeps all their data), and any matching Shopping List items will be deleted.`)) {
     return;
   }
 
@@ -748,9 +748,8 @@ function statusOptionsHtml(req) {
   return `
     <option value="requested" ${req.status === 'requested' ? 'selected' : ''}>Requested</option>
     <option value="found" ${req.status === 'found' ? 'selected' : ''}>Found</option>
-    <option value="sent" ${req.status === 'sent' ? 'selected' : ''}>Sent</option>
+    <option value="messaged" ${req.status === 'messaged' ? 'selected' : ''}>Messaged</option>
     <option value="paid" ${req.status === 'paid' ? 'selected' : ''}>Paid</option>
-    <option value="purchased" ${req.status === 'purchased' ? 'selected' : ''}>Purchased</option>
   `;
 }
 

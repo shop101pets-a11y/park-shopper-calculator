@@ -15,10 +15,22 @@ module.exports = async (req, res) => {
         res.status(400).json({ error: 'orderIds is required and must be a non-empty array' });
         return;
       }
+      let shoppingListDeleted = 0;
       for (const orderId of orderIds) {
         await sql`UPDATE finance_rows SET packed = true WHERE order_id = ${orderId}`;
+        // Same order id tagged onto Shopping List items when their payment
+        // link was generated (see create-payment-link.js / app.js) - once
+        // an order is packed and shipped, those items are done and should
+        // disappear from the Shopping List too. Soft delete, same as the
+        // manual delete button, so it can't undo a resync either.
+        const deleted = await sql`
+          UPDATE shopping_requests SET deleted_at = now()
+          WHERE square_order_id = ${orderId} AND deleted_at IS NULL
+          RETURNING id
+        `;
+        shoppingListDeleted += deleted.length;
       }
-      res.status(200).json({ updated: orderIds.length });
+      res.status(200).json({ updated: orderIds.length, shoppingListDeleted });
       return;
     }
 

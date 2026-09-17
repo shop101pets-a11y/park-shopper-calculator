@@ -141,6 +141,11 @@ async function ensureSchema(sql) {
   // the same Google Sheet data never brings back something the shopper
   // deliberately removed. Every read of shopping_requests filters this out.
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
+
+  // "Sent" is now labeled "Messaged" in the UI - rename the stored value to
+  // match instead of just relabeling it, so the data and the label agree.
+  // Permanently idempotent: once no row is left at 'sent', this is a no-op.
+  await sql`UPDATE shopping_requests SET status = 'messaged' WHERE status = 'sent'`;
 }
 
 function rowToJson(row) {
