@@ -1,4 +1,5 @@
 const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
+const { archiveRequestImage } = require('./_google');
 
 const PATCHABLE_COLUMNS = {
   tags: 'tags',
@@ -95,12 +96,16 @@ module.exports = async (req, res) => {
       const updated = await sql`
         UPDATE shopping_requests SET deleted_at = now()
         WHERE id = ${id} AND deleted_at IS NULL
-        RETURNING id
+        RETURNING id, reference_image_file_id, reference_image_url
       `;
       if (!updated.length) {
         res.status(404).json({ error: 'Request not found' });
         return;
       }
+      await archiveRequestImage({
+        referenceImageFileId: updated[0].reference_image_file_id,
+        referenceImageUrl: updated[0].reference_image_url,
+      });
       res.status(200).json({ deleted: true });
       return;
     }

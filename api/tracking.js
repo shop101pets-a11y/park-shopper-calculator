@@ -1,4 +1,5 @@
 const { getSql, ensureSchema } = require('./_db');
+const { archiveRequestImage } = require('./_google');
 
 function normalizeName(name) {
   return (name || '').trim().toLowerCase().replace(/\s+/g, ' ');
@@ -26,9 +27,15 @@ module.exports = async (req, res) => {
         const deleted = await sql`
           UPDATE shopping_requests SET deleted_at = now()
           WHERE square_order_id = ${orderId} AND deleted_at IS NULL
-          RETURNING id
+          RETURNING id, reference_image_file_id, reference_image_url
         `;
         shoppingListDeleted += deleted.length;
+        for (const row of deleted) {
+          await archiveRequestImage({
+            referenceImageFileId: row.reference_image_file_id,
+            referenceImageUrl: row.reference_image_url,
+          });
+        }
       }
       res.status(200).json({ updated: orderIds.length, shoppingListDeleted });
       return;

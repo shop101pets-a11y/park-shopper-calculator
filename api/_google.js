@@ -41,7 +41,10 @@ async function getGoogleAccessToken() {
   const jwt = signJwt(
     {
       iss: email,
-      scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive.readonly',
+      // Drive needs write access (not just .readonly) to move a file
+      // between folders - Sheets stays read-only, we never write to the
+      // form's response spreadsheet itself.
+      scope: 'https://www.googleapis.com/auth/spreadsheets.readonly https://www.googleapis.com/auth/drive',
       aud: 'https://oauth2.googleapis.com/token',
       iat: now,
       exp: now + 3600,
@@ -89,4 +92,53 @@ async function fetchDriveFile(fileId) {
   return { buffer, contentType };
 }
 
-module.exports = { getGoogleAccessToken, extractDriveFileId, fetchDriveFile };
+// Moves a file into a different folder (e.g. once its request is done) by
+// swapping its parent - Drive files can have multiple parents, so this
+// removes whichever ones it's currently in and adds the new one.
+async function moveFileToFolder(fileId, destFolderId) {
+  const token = await getGoogleAccessToken();
+  const authHeader = { Authorization: `Bearer ${token}` };
+
+  const getRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=parents`, {
+    headers: authHeader,
+  });
+  const fileData = await getRes.json();
+  if (!getRes.ok) {
+    throw new Error(fileData.error?.message || `Drive returned ${getRes.status}`);
+  }
+
+  const currentParents = (fileData.parents || []).join(',');
+  const params = new URLSearchParams({ addParents: destFolderId });
+  if (currentParents) params.set('removeParents', currentParents);
+
+  const updateRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?${params}`, {
+    method: 'PATCH',
+    headers: authHeader,
+  });
+  if (!updateRes.ok) {
+    const data = await updateRes.json();
+    throw new Error(data.error?.message || `Drive returned ${updateRes.status}`);
+  }
+}
+
+// Best-effort: moves a request's reference photo into the "done" folder
+// (configured via GOOGLE_DRIVE_DONE_FOLDER_ID) so it's out of the active
+// upload folder and easy to spot for manual cleanup later. Never throws -
+// callers use this as a side effect of deleting a request, and a photo
+// that fails to move (already moved, permission not granted yet, etc.)
+// shouldn't block the actual delete.
+async function archiveRequestImage({ referenceImageFileId, referenceImageUrl }) {
+  const doneFolderId = process.env.GOOGLE_DRIVE_DONE_FOLDER_ID;
+  if (!doneFolderId) return;
+
+  const fileId = referenceImageFileId || extractDriveFileId(referenceImageUrl);
+  if (!fileId) return;
+
+  try {
+    await moveFileToFolder(fileId, doneFolderId);
+  } catch {
+    // ignored - see comment above
+  }
+}
+
+module.exports = { getGoogleAccessToken, extractDriveFileId, fetchDriveFile, moveFileToFolder, archiveRequestImage };
