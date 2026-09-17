@@ -99,7 +99,7 @@ module.exports = async (req, res) => {
     const untagged = await sql`
       SELECT id, item_description, reference_image_file_id
       FROM shopping_requests
-      WHERE tags = '{}'
+      WHERE tags = '{}' AND deleted_at IS NULL
       LIMIT 30
     `;
     for (const row of untagged) {
@@ -112,6 +112,7 @@ module.exports = async (req, res) => {
 
     const persisted = await sql`
       SELECT * FROM shopping_requests
+      WHERE deleted_at IS NULL
       ORDER BY submitted_at DESC NULLS LAST, id DESC
     `;
 

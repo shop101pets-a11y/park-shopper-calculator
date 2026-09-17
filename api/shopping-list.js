@@ -21,6 +21,7 @@ module.exports = async (req, res) => {
     if (req.method === 'GET') {
       const rows = await sql`
         SELECT * FROM shopping_requests
+        WHERE deleted_at IS NULL
         ORDER BY submitted_at DESC NULLS LAST, id DESC
       `;
       res.status(200).json({ requests: rows.map(shoppingRequestToJson) });
@@ -88,7 +89,18 @@ module.exports = async (req, res) => {
         res.status(400).json({ error: 'id is required' });
         return;
       }
-      await sql`DELETE FROM shopping_requests WHERE id = ${id}`;
+      // Soft delete rather than removing the row - it stays in the
+      // (submitted_at, item_description) dedup index, so re-syncing the
+      // same Google Sheet response never re-inserts it as if it were new.
+      const updated = await sql`
+        UPDATE shopping_requests SET deleted_at = now()
+        WHERE id = ${id} AND deleted_at IS NULL
+        RETURNING id
+      `;
+      if (!updated.length) {
+        res.status(404).json({ error: 'Request not found' });
+        return;
+      }
       res.status(200).json({ deleted: true });
       return;
     }

@@ -22,7 +22,7 @@ module.exports = async (req, res) => {
     // paid or purchased is a candidate to check.
     const pending = await sql`
       SELECT DISTINCT square_order_id FROM shopping_requests
-      WHERE square_order_id IS NOT NULL AND status NOT IN ('paid', 'purchased')
+      WHERE square_order_id IS NOT NULL AND status NOT IN ('paid', 'purchased') AND deleted_at IS NULL
     `;
     const orderIds = pending.map((r) => r.square_order_id);
 
@@ -57,7 +57,7 @@ module.exports = async (req, res) => {
         const updated = await sql`
           UPDATE shopping_requests
           SET status = 'paid'
-          WHERE square_order_id = ${orderId} AND status NOT IN ('paid', 'purchased')
+          WHERE square_order_id = ${orderId} AND status NOT IN ('paid', 'purchased') AND deleted_at IS NULL
           RETURNING id
         `;
         updatedCount += updated.length;
@@ -66,6 +66,7 @@ module.exports = async (req, res) => {
 
     const persisted = await sql`
       SELECT * FROM shopping_requests
+      WHERE deleted_at IS NULL
       ORDER BY submitted_at DESC NULLS LAST, id DESC
     `;
 

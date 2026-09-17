@@ -135,6 +135,12 @@ async function ensureSchema(sql) {
   // "refresh from Square" can look up that order's payment status and mark
   // the matching rows paid automatically.
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS square_order_id TEXT`;
+
+  // Soft delete: a deleted row keeps its spot in the (submitted_at,
+  // item_description) dedup index instead of freeing it up, so re-syncing
+  // the same Google Sheet data never brings back something the shopper
+  // deliberately removed. Every read of shopping_requests filters this out.
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS deleted_at TIMESTAMPTZ`;
 }
 
 function rowToJson(row) {
