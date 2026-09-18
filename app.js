@@ -1046,7 +1046,9 @@ shoppingListContent.addEventListener('click', async (e) => {
         req.referenceImageFileId = data.request.referenceImageFileId;
         req.referenceImageUrl = data.request.referenceImageUrl;
       }
-      unassignedPhotos = unassignedPhotos.filter((p) => p.id !== fileId);
+      // Stays in unassignedPhotos on purpose - the same photo (e.g. a
+      // generic "any keychain" reference) can be assigned to as many
+      // no-photo cards as it applies to, not just the first one.
       renderShoppingList();
     } catch (err) {
       thumb.classList.remove('assigning');
