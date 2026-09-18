@@ -121,40 +121,31 @@ async function moveFileToFolder(fileId, destFolderId) {
   }
 }
 
-// Uploads a new file into a folder via Drive's multipart upload - built by
-// hand (no client library) the same way the rest of this file talks to
-// Google's REST APIs directly. Returns the new file's id.
-async function uploadFileToDrive({ name, folderId, buffer, contentType }) {
+// Lists every file directly inside a folder (paginated) - id/name only,
+// enough to show a picker of "photos not yet linked to any request."
+async function listFilesInFolder(folderId) {
   const token = await getGoogleAccessToken();
-  const boundary = `parkshopper-${Date.now()}-${Math.random().toString(36).slice(2)}`;
-  const metadata = JSON.stringify({ name, parents: [folderId] });
+  const authHeader = { Authorization: `Bearer ${token}` };
 
-  const body = Buffer.concat([
-    Buffer.from(
-      `--${boundary}\r\n` +
-      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
-      `${metadata}\r\n` +
-      `--${boundary}\r\n` +
-      `Content-Type: ${contentType}\r\n\r\n`
-    ),
-    buffer,
-    Buffer.from(`\r\n--${boundary}--`),
-  ]);
+  let files = [];
+  let pageToken;
+  do {
+    const params = new URLSearchParams({
+      q: `'${folderId}' in parents and trashed = false`,
+      fields: 'nextPageToken, files(id, name)',
+      pageSize: '1000',
+    });
+    if (pageToken) params.set('pageToken', pageToken);
+    const response = await fetch(`https://www.googleapis.com/drive/v3/files?${params}`, { headers: authHeader });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(data.error?.message || `Drive returned ${response.status}`);
+    }
+    files = files.concat(data.files || []);
+    pageToken = data.nextPageToken;
+  } while (pageToken);
 
-  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
-    method: 'POST',
-    headers: {
-      Authorization: `Bearer ${token}`,
-      'Content-Type': `multipart/related; boundary=${boundary}`,
-    },
-    body,
-  });
-
-  const data = await response.json();
-  if (!response.ok) {
-    throw new Error(data.error?.message || `Drive returned ${response.status}`);
-  }
-  return data.id;
+  return files;
 }
 
 // Best-effort: moves a request's reference photo into the "done" folder
@@ -181,7 +172,7 @@ module.exports = {
   getGoogleAccessToken,
   extractDriveFileId,
   fetchDriveFile,
-  uploadFileToDrive,
+  listFilesInFolder,
   moveFileToFolder,
   archiveRequestImage,
 };

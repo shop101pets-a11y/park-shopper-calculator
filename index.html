@@ -199,6 +199,12 @@
         <p id="shopping-sync-error" class="payment-link-error" style="display:none;"></p>
       </section>
 
+      <section id="shopping-unassigned-section" class="import-section" style="display:none;">
+        <h2>Photos to assign</h2>
+        <p class="import-hint">Add photos to your shared Drive folder anytime - they'll show up here to match to a request.</p>
+        <div id="shopping-unassigned-list" class="unassigned-photo-list"></div>
+      </section>
+
       <section class="finance-table-section">
         <div class="finance-table-header">
           <h2>Shopping List</h2>
@@ -216,6 +222,10 @@
             <option value="messaged">Messaged</option>
             <option value="paid">Paid</option>
           </select>
+          <label class="no-photo-filter-label">
+            <input type="checkbox" id="shopping-no-photo-filter">
+            No photo only
+          </label>
           <div class="view-toggle">
             <button id="shopping-display-card-btn" class="btn-toggle active" type="button">Card</button>
             <button id="shopping-display-list-btn" class="btn-toggle" type="button">List</button>

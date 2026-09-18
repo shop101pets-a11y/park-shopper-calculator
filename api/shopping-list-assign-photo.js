@@ -1,5 +1,5 @@
 const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
-const { uploadFileToDrive, archiveRequestImage } = require('./_google');
+const { archiveRequestImage } = require('./_google');
 
 module.exports = async (req, res) => {
   if (req.method !== 'POST') {
@@ -7,15 +7,9 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const uploadFolderId = process.env.GOOGLE_DRIVE_UPLOAD_FOLDER_ID;
-  if (!uploadFolderId) {
-    res.status(500).json({ error: 'GOOGLE_DRIVE_UPLOAD_FOLDER_ID is not configured on the server' });
-    return;
-  }
-
-  const { id, imageBase64, contentType } = req.body || {};
-  if (!id || !imageBase64) {
-    res.status(400).json({ error: 'id and imageBase64 are required' });
+  const { id, fileId } = req.body || {};
+  if (!id || !fileId) {
+    res.status(400).json({ error: 'id and fileId are required' });
     return;
   }
 
@@ -32,17 +26,6 @@ module.exports = async (req, res) => {
       return;
     }
 
-    const mimeType = contentType || 'image/jpeg';
-    const extension = mimeType.split('/')[1] || 'jpg';
-    const buffer = Buffer.from(imageBase64, 'base64');
-
-    const fileId = await uploadFileToDrive({
-      name: `manual-${id}-${Date.now()}.${extension}`,
-      folderId: uploadFolderId,
-      buffer,
-      contentType: mimeType,
-    });
-
     const previousFileId = existing[0].reference_image_file_id;
 
     const updated = await sql`
@@ -54,7 +37,7 @@ module.exports = async (req, res) => {
 
     // Whatever photo this replaces (if any) is done being useful here -
     // archive it the same way a delete would, best-effort.
-    if (previousFileId) {
+    if (previousFileId && previousFileId !== fileId) {
       await archiveRequestImage({ referenceImageFileId: previousFileId, referenceImageUrl: null });
     }
 

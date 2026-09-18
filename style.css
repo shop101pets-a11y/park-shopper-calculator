@@ -516,7 +516,7 @@ header h1 {
 
 .shopping-request-row {
   display: grid;
-  grid-template-columns: 1fr 120px 160px 90px 24px 24px;
+  grid-template-columns: 1fr 120px 160px 90px 24px;
   gap: 10px;
   align-items: center;
   padding: 8px 0;
@@ -578,32 +578,6 @@ header h1 {
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
 }
 
-.btn-upload-photo {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  font-size: 1rem;
-  line-height: 1;
-  border-radius: 6px;
-  color: var(--muted);
-}
-
-.btn-upload-photo:hover {
-  color: var(--accent);
-}
-
-.btn-upload-card {
-  position: absolute;
-  top: 6px;
-  left: 6px;
-  z-index: 1;
-  width: 28px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(255, 255, 255, 0.85);
-  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
-}
 
 .shopping-request-row.found-priced,
 .shopping-card.found-priced {
@@ -745,6 +719,88 @@ header h1 {
   gap: 10px;
   align-items: center;
   flex-wrap: wrap;
+}
+
+.no-photo-filter-label {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 0.85rem;
+  color: var(--text);
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.unassigned-photo-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.unassigned-photo {
+  display: flex;
+  gap: 12px;
+  align-items: flex-start;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  padding: 10px;
+}
+
+.unassigned-photo-thumb {
+  width: 64px;
+  height: 64px;
+  object-fit: cover;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  flex-shrink: 0;
+}
+
+.unassigned-photo-body {
+  flex: 1;
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+
+.unassigned-photo-name {
+  font-size: 0.82rem;
+  color: var(--muted);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.unassigned-photo-search {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+}
+
+.unassigned-photo-results {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+}
+
+.unassigned-assign-btn {
+  padding: 5px 10px;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  font-size: 0.78rem;
+  cursor: pointer;
+}
+
+.unassigned-assign-btn:hover {
+  border-color: var(--accent);
+  color: var(--accent);
+}
+
+.unassigned-no-results {
+  font-size: 0.8rem;
+  color: var(--muted);
 }
 
 .import-preview {
