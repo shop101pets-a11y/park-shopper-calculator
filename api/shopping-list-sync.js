@@ -67,6 +67,7 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     let newlyTagged = 0;
+    let imagesBackfilled = 0;
 
     for (const r of candidates) {
       const fileId = extractDriveFileId(r.referenceImageUrl);
@@ -90,6 +91,20 @@ module.exports = async (req, res) => {
           await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${inserted[0].id}`;
           newlyTagged += 1;
         }
+      } else if (r.referenceImageUrl) {
+        // A duplicate hit means this row already existed - if it was
+        // inserted before a parser fix and is missing an image the sheet
+        // actually has, fill the gap. Only ever fills a NULL, so this can
+        // never overwrite a photo that's already set (including one
+        // manually assigned via the assign-photo picker).
+        const backfilled = await sql`
+          UPDATE shopping_requests
+          SET reference_image_url = ${r.referenceImageUrl}, reference_image_file_id = ${fileId}
+          WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
+            AND reference_image_file_id IS NULL AND reference_image_url IS NULL
+          RETURNING id
+        `;
+        if (backfilled.length) imagesBackfilled += 1;
       }
     }
 
@@ -118,7 +133,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });
