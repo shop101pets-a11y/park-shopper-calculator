@@ -121,6 +121,42 @@ async function moveFileToFolder(fileId, destFolderId) {
   }
 }
 
+// Uploads a new file into a folder via Drive's multipart upload - built by
+// hand (no client library) the same way the rest of this file talks to
+// Google's REST APIs directly. Returns the new file's id.
+async function uploadFileToDrive({ name, folderId, buffer, contentType }) {
+  const token = await getGoogleAccessToken();
+  const boundary = `parkshopper-${Date.now()}-${Math.random().toString(36).slice(2)}`;
+  const metadata = JSON.stringify({ name, parents: [folderId] });
+
+  const body = Buffer.concat([
+    Buffer.from(
+      `--${boundary}\r\n` +
+      `Content-Type: application/json; charset=UTF-8\r\n\r\n` +
+      `${metadata}\r\n` +
+      `--${boundary}\r\n` +
+      `Content-Type: ${contentType}\r\n\r\n`
+    ),
+    buffer,
+    Buffer.from(`\r\n--${boundary}--`),
+  ]);
+
+  const response = await fetch('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id', {
+    method: 'POST',
+    headers: {
+      Authorization: `Bearer ${token}`,
+      'Content-Type': `multipart/related; boundary=${boundary}`,
+    },
+    body,
+  });
+
+  const data = await response.json();
+  if (!response.ok) {
+    throw new Error(data.error?.message || `Drive returned ${response.status}`);
+  }
+  return data.id;
+}
+
 // Best-effort: moves a request's reference photo into the "done" folder
 // (configured via GOOGLE_DRIVE_DONE_FOLDER_ID) so it's out of the active
 // upload folder and easy to spot for manual cleanup later. Never throws -
@@ -141,4 +177,11 @@ async function archiveRequestImage({ referenceImageFileId, referenceImageUrl }) 
   }
 }
 
-module.exports = { getGoogleAccessToken, extractDriveFileId, fetchDriveFile, moveFileToFolder, archiveRequestImage };
+module.exports = {
+  getGoogleAccessToken,
+  extractDriveFileId,
+  fetchDriveFile,
+  uploadFileToDrive,
+  moveFileToFolder,
+  archiveRequestImage,
+};

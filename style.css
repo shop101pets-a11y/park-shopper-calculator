@@ -516,7 +516,7 @@ header h1 {
 
 .shopping-request-row {
   display: grid;
-  grid-template-columns: 1fr 120px 160px 90px 24px;
+  grid-template-columns: 1fr 120px 160px 90px 24px 24px;
   gap: 10px;
   align-items: center;
   padding: 8px 0;
@@ -573,6 +573,33 @@ header h1 {
   z-index: 1;
   width: 24px;
   height: 24px;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);
+}
+
+.btn-upload-photo {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  font-size: 1rem;
+  line-height: 1;
+  border-radius: 6px;
+  color: var(--muted);
+}
+
+.btn-upload-photo:hover {
+  color: var(--accent);
+}
+
+.btn-upload-card {
+  position: absolute;
+  top: 6px;
+  left: 6px;
+  z-index: 1;
+  width: 28px;
+  height: 28px;
   border-radius: 999px;
   background: rgba(255, 255, 255, 0.85);
   box-shadow: 0 1px 3px rgba(0, 0, 0, 0.2);

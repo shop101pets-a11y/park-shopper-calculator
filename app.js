@@ -767,6 +767,15 @@ function priceInputHtml(req) {
   return `<input type="number" step="0.01" min="0" class="price-input" data-field="price" placeholder="Price" value="${req.price === null || req.price === undefined ? '' : req.price}">`;
 }
 
+function photoUploadInputHtml(req, extraClass) {
+  return `
+    <label class="btn-upload-photo${extraClass ? ` ${extraClass}` : ''}" title="${req.referenceImageFileId || req.referenceImageUrl ? 'Change photo' : 'Add photo'}">
+      <span class="btn-upload-icon">&#128247;</span>
+      <input type="file" accept="image/*" class="image-upload-input" data-id="${req.id}" hidden>
+    </label>
+  `;
+}
+
 function requestRowHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
   const thumbUrl = referenceImageProxyUrl(req);
@@ -784,6 +793,7 @@ function requestRowHtml(req) {
       <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
       ${priceInputHtml(req)}
+      ${photoUploadInputHtml(req)}
       <button type="button" class="btn-delete-request" data-id="${req.id}" title="Delete">&times;</button>
     </div>
   `;
@@ -803,6 +813,7 @@ function requestCardHtml(req) {
     <div class="shopping-card${statusHighlightClass(req)}" data-id="${req.id}">
       <button type="button" class="btn-delete-request btn-delete-card" data-id="${req.id}" title="Delete">&times;</button>
       ${photoBlock}
+      ${photoUploadInputHtml(req, 'btn-upload-card')}
       <div class="card-body">
         <div class="card-item">${details}</div>
         <div class="card-footer">
@@ -957,6 +968,80 @@ shoppingListContent.addEventListener('change', async (e) => {
     renderShoppingList();
     shoppingListEmptyState.textContent = `Couldn't save change: ${err.message}`;
     shoppingListEmptyState.style.display = 'block';
+  }
+});
+
+// Downscales/compresses an image client-side before upload so a full-size
+// phone photo doesn't risk hitting the serverless function's request body
+// limit - a product photo doesn't need more than this to be useful.
+function resizeImageFile(file, maxDimension = 1600, quality = 0.82) {
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const scale = Math.min(1, maxDimension / Math.max(img.width, img.height));
+      const canvas = document.createElement('canvas');
+      canvas.width = Math.round(img.width * scale);
+      canvas.height = Math.round(img.height * scale);
+      canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+      canvas.toBlob(
+        (blob) => (blob ? resolve(blob) : reject(new Error('Could not process image'))),
+        'image/jpeg',
+        quality
+      );
+    };
+    img.onerror = () => {
+      URL.revokeObjectURL(url);
+      reject(new Error('Could not read image file'));
+    };
+    img.src = url;
+  });
+}
+
+function blobToBase64(blob) {
+  return new Promise((resolve, reject) => {
+    const reader = new FileReader();
+    reader.onload = () => resolve(reader.result.split(',')[1]);
+    reader.onerror = () => reject(new Error('Could not read image data'));
+    reader.readAsDataURL(blob);
+  });
+}
+
+shoppingListContent.addEventListener('change', async (e) => {
+  const uploadInput = e.target.closest('.image-upload-input');
+  if (uploadInput) {
+    const file = uploadInput.files?.[0];
+    if (!file) return;
+    const id = Number(uploadInput.dataset.id);
+    const req = shoppingRequests.find((r) => r.id === id);
+    if (!req) return;
+
+    const icon = uploadInput.closest('.btn-upload-photo').querySelector('.btn-upload-icon');
+    const originalIcon = icon.innerHTML;
+    icon.innerHTML = '&hellip;';
+
+    try {
+      const resized = await resizeImageFile(file);
+      const imageBase64 = await blobToBase64(resized);
+      const response = await fetch('/api/shopping-list-image', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id, imageBase64, contentType: 'image/jpeg' }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      }
+      req.referenceImageFileId = data.request.referenceImageFileId;
+      req.referenceImageUrl = data.request.referenceImageUrl;
+      renderShoppingList();
+    } catch (err) {
+      icon.innerHTML = originalIcon;
+      shoppingListEmptyState.textContent = `Couldn't upload photo: ${err.message}`;
+      shoppingListEmptyState.style.display = 'block';
+    }
+    return;
   }
 });
 
