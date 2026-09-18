@@ -791,6 +791,32 @@ header h1 {
   pointer-events: none;
 }
 
+.assign-photo-option {
+  position: relative;
+  display: inline-block;
+}
+
+.btn-discard-photo {
+  position: absolute;
+  top: -5px;
+  right: -5px;
+  width: 16px;
+  height: 16px;
+  padding: 0;
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  background: var(--card);
+  color: var(--muted);
+  font-size: 0.65rem;
+  line-height: 1;
+  cursor: pointer;
+}
+
+.btn-discard-photo:hover {
+  color: var(--danger);
+  border-color: var(--danger);
+}
+
 .import-preview {
   margin-top: 14px;
   display: flex;

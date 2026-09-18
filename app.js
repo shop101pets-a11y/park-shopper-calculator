@@ -826,7 +826,12 @@ function requestCardHtml(req) {
       <div class="assign-photo-picker">
         <p class="assign-photo-hint">Assign a photo:</p>
         <div class="assign-photo-thumbs">
-          ${unassignedPhotos.map((p) => `<img src="/api/drive-image?fileId=${p.id}" class="assign-photo-thumb" data-file-id="${p.id}" data-request-id="${req.id}" title="${escapeHtml(p.name)}" alt="${escapeHtml(p.name)}">`).join('')}
+          ${unassignedPhotos.map((p) => `
+            <div class="assign-photo-option">
+              <img src="/api/drive-image?fileId=${p.id}" class="assign-photo-thumb" data-file-id="${p.id}" data-request-id="${req.id}" title="${escapeHtml(p.name)}" alt="${escapeHtml(p.name)}">
+              <button type="button" class="btn-discard-photo" data-file-id="${p.id}" title="Remove - not needed as an option anymore">&times;</button>
+            </div>
+          `).join('')}
         </div>
       </div>
     `
@@ -1048,6 +1053,30 @@ shoppingListContent.addEventListener('change', (e) => {
 });
 
 shoppingListContent.addEventListener('click', async (e) => {
+  const discardBtn = e.target.closest('.btn-discard-photo');
+  if (discardBtn) {
+    const fileId = discardBtn.dataset.fileId;
+    discardBtn.disabled = true;
+    try {
+      const response = await fetch('/api/shopping-list-discard-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ fileId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      }
+      unassignedPhotos = unassignedPhotos.filter((p) => p.id !== fileId);
+      renderShoppingList();
+    } catch (err) {
+      discardBtn.disabled = false;
+      shoppingListEmptyState.textContent = `Couldn't remove photo: ${err.message}`;
+      shoppingListEmptyState.style.display = 'block';
+    }
+    return;
+  }
+
   const thumb = e.target.closest('.assign-photo-thumb');
   if (thumb) {
     const fileId = thumb.dataset.fileId;
