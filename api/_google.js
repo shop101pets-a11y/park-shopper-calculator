@@ -131,7 +131,7 @@ async function listFilesInFolder(folderId) {
   let pageToken;
   do {
     const params = new URLSearchParams({
-      q: `'${folderId}' in parents and trashed = false`,
+      q: `'${folderId}' in parents and trashed = false and mimeType != 'application/vnd.google-apps.folder'`,
       fields: 'nextPageToken, files(id, name)',
       pageSize: '1000',
     });
