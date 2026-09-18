@@ -620,9 +620,6 @@ const shoppingListEmptyState = document.getElementById('shopping-list-empty-stat
 const shoppingSyncBtn = document.getElementById('shopping-sync-btn');
 const shoppingSyncError = document.getElementById('shopping-sync-error');
 const shoppingSquareRefreshBtn = document.getElementById('shopping-square-refresh-btn');
-const shoppingUnassignedSection = document.getElementById('shopping-unassigned-section');
-const shoppingUnassignedList = document.getElementById('shopping-unassigned-list');
-
 shoppingNoPhotoFilterInput.addEventListener('change', () => {
   shoppingNoPhotoOnly = shoppingNoPhotoFilterInput.checked;
   renderShoppingList();
@@ -729,89 +726,20 @@ async function loadShoppingList() {
 
 // Photos the shopper dropped into the shared Drive folder themselves (their
 // own Google account, so no service-account storage-quota issue) that
-// aren't linked to any request yet. Silently does nothing if the feature
-// isn't configured (GOOGLE_DRIVE_UPLOAD_FOLDER_ID not set) - not worth
-// surfacing as an error on every load for something optional.
+// aren't linked to any request yet. Feeds the assign-photo picker shown
+// directly on no-photo cards - silently does nothing if the feature isn't
+// configured (GOOGLE_DRIVE_UPLOAD_FOLDER_ID not set).
 async function loadUnassignedPhotos() {
   try {
     const response = await fetch('/api/shopping-list-unassigned-photos');
     const data = await response.json();
-    if (!response.ok) {
-      shoppingUnassignedSection.style.display = 'none';
-      return;
-    }
+    if (!response.ok) return;
     unassignedPhotos = data.photos || [];
-    renderUnassignedPhotos();
-  } catch {
-    shoppingUnassignedSection.style.display = 'none';
-  }
-}
-
-function renderUnassignedPhotos() {
-  shoppingUnassignedSection.style.display = unassignedPhotos.length ? 'block' : 'none';
-  shoppingUnassignedList.innerHTML = unassignedPhotos.map((photo) => `
-    <div class="unassigned-photo" data-file-id="${photo.id}">
-      <img src="/api/drive-image?fileId=${photo.id}" class="unassigned-photo-thumb" alt="${escapeHtml(photo.name)}" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'No preview'}))">
-      <div class="unassigned-photo-body">
-        <div class="unassigned-photo-name">${escapeHtml(photo.name)}</div>
-        <input type="text" class="unassigned-photo-search" placeholder="Search item or customer to assign...">
-        <div class="unassigned-photo-results"></div>
-      </div>
-    </div>
-  `).join('');
-}
-
-shoppingUnassignedList.addEventListener('input', (e) => {
-  const input = e.target.closest('.unassigned-photo-search');
-  if (!input) return;
-  const query = input.value.trim().toLowerCase();
-  const resultsEl = input.nextElementSibling;
-  if (!query) {
-    resultsEl.innerHTML = '';
-    return;
-  }
-  const matches = shoppingRequests
-    .filter((r) => r.item.toLowerCase().includes(query) || r.customer.toLowerCase().includes(query))
-    .slice(0, 6);
-  resultsEl.innerHTML = matches.map((r) => `
-    <button type="button" class="unassigned-assign-btn" data-request-id="${r.id}">${escapeHtml(r.item)} &middot; ${escapeHtml(r.customer)}</button>
-  `).join('') || '<span class="unassigned-no-results">No matches</span>';
-});
-
-shoppingUnassignedList.addEventListener('click', async (e) => {
-  const btn = e.target.closest('.unassigned-assign-btn');
-  if (!btn) return;
-
-  const photoEl = btn.closest('.unassigned-photo');
-  const fileId = photoEl.dataset.fileId;
-  const requestId = Number(btn.dataset.requestId);
-
-  btn.disabled = true;
-  btn.textContent = 'Assigning...';
-
-  try {
-    const response = await fetch('/api/shopping-list-assign-photo', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ id: requestId, fileId }),
-    });
-    const data = await response.json();
-    if (!response.ok) {
-      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
-    }
-    const req = shoppingRequests.find((r) => r.id === requestId);
-    if (req) {
-      req.referenceImageFileId = data.request.referenceImageFileId;
-      req.referenceImageUrl = data.request.referenceImageUrl;
-    }
-    unassignedPhotos = unassignedPhotos.filter((p) => p.id !== fileId);
-    renderUnassignedPhotos();
     renderShoppingList();
-  } catch (err) {
-    btn.disabled = false;
-    btn.textContent = 'Couldn\'t assign - retry?';
+  } catch {
+    // ignored - see comment above
   }
-});
+}
 
 function renderTagCloud() {
   const allTags = [...new Set(shoppingRequests.flatMap((r) => r.tags))].sort();
@@ -893,9 +821,19 @@ function requestCardHtml(req) {
   const photo = thumbUrl
     ? `<img src="${escapeHtml(thumbUrl)}" class="card-thumb" alt="reference photo" onerror="this.parentElement.classList.add('no-photo');this.replaceWith(Object.assign(document.createElement('span'),{textContent:'No photo'}))">`
     : '';
+  const noPhotoContent = unassignedPhotos.length
+    ? `
+      <div class="assign-photo-picker">
+        <p class="assign-photo-hint">Assign a photo:</p>
+        <div class="assign-photo-thumbs">
+          ${unassignedPhotos.map((p) => `<img src="/api/drive-image?fileId=${p.id}" class="assign-photo-thumb" data-file-id="${p.id}" data-request-id="${req.id}" title="${escapeHtml(p.name)}" alt="${escapeHtml(p.name)}">`).join('')}
+        </div>
+      </div>
+    `
+    : 'No photo';
   const photoBlock = linkTarget
     ? `<a class="card-photo${photo ? '' : ' no-photo'}" href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${photo || 'No photo'}</a>`
-    : `<div class="card-photo no-photo">No photo</div>`;
+    : `<div class="card-photo no-photo">${noPhotoContent}</div>`;
   return `
     <div class="shopping-card${statusHighlightClass(req)}" data-id="${req.id}">
       <button type="button" class="btn-delete-request btn-delete-card" data-id="${req.id}" title="Delete">&times;</button>
@@ -1087,6 +1025,37 @@ shoppingListContent.addEventListener('change', (e) => {
 });
 
 shoppingListContent.addEventListener('click', async (e) => {
+  const thumb = e.target.closest('.assign-photo-thumb');
+  if (thumb) {
+    const fileId = thumb.dataset.fileId;
+    const requestId = Number(thumb.dataset.requestId);
+
+    thumb.classList.add('assigning');
+    try {
+      const response = await fetch('/api/shopping-list-assign-photo', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ id: requestId, fileId }),
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+      }
+      const req = shoppingRequests.find((r) => r.id === requestId);
+      if (req) {
+        req.referenceImageFileId = data.request.referenceImageFileId;
+        req.referenceImageUrl = data.request.referenceImageUrl;
+      }
+      unassignedPhotos = unassignedPhotos.filter((p) => p.id !== fileId);
+      renderShoppingList();
+    } catch (err) {
+      thumb.classList.remove('assigning');
+      shoppingListEmptyState.textContent = `Couldn't assign photo: ${err.message}`;
+      shoppingListEmptyState.style.display = 'block';
+    }
+    return;
+  }
+
   const deleteBtn = e.target.closest('.btn-delete-request');
   if (deleteBtn) {
     const id = Number(deleteBtn.dataset.id);

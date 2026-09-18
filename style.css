@@ -731,76 +731,45 @@ header h1 {
   white-space: nowrap;
 }
 
-.unassigned-photo-list {
+.assign-photo-picker {
   display: flex;
   flex-direction: column;
-  gap: 10px;
-}
-
-.unassigned-photo {
-  display: flex;
-  gap: 12px;
-  align-items: flex-start;
-  border: 1px solid var(--border);
-  border-radius: 8px;
+  align-items: center;
+  gap: 6px;
   padding: 10px;
+  width: 100%;
 }
 
-.unassigned-photo-thumb {
-  width: 64px;
-  height: 64px;
+.assign-photo-hint {
+  margin: 0;
+  font-size: 0.78rem;
+  color: var(--muted);
+}
+
+.assign-photo-thumbs {
+  display: flex;
+  flex-wrap: wrap;
+  justify-content: center;
+  gap: 6px;
+}
+
+.assign-photo-thumb {
+  width: 44px;
+  height: 44px;
   object-fit: cover;
   border-radius: 6px;
   border: 1px solid var(--border);
-  flex-shrink: 0;
-}
-
-.unassigned-photo-body {
-  flex: 1;
-  min-width: 0;
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-}
-
-.unassigned-photo-name {
-  font-size: 0.82rem;
-  color: var(--muted);
-  overflow: hidden;
-  text-overflow: ellipsis;
-  white-space: nowrap;
-}
-
-.unassigned-photo-search {
-  padding: 7px 9px;
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  font-size: 0.85rem;
-}
-
-.unassigned-photo-results {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 6px;
-}
-
-.unassigned-assign-btn {
-  padding: 5px 10px;
-  border: 1px solid var(--border);
-  border-radius: 999px;
-  background: var(--card);
-  font-size: 0.78rem;
   cursor: pointer;
+  background: var(--card);
 }
 
-.unassigned-assign-btn:hover {
+.assign-photo-thumb:hover {
   border-color: var(--accent);
-  color: var(--accent);
 }
 
-.unassigned-no-results {
-  font-size: 0.8rem;
-  color: var(--muted);
+.assign-photo-thumb.assigning {
+  opacity: 0.5;
+  pointer-events: none;
 }
 
 .import-preview {
