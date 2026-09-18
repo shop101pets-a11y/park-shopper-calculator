@@ -861,6 +861,10 @@ function getCustomerLinkState(customer, reqs) {
   if (!customerLinkState[customer]) {
     customerLinkState[customer] = {
       selected: new Set(reqs.filter(isFoundAndPriced).map((r) => r.id)),
+      // How many of each item's requested quantity to actually include in
+      // the link - defaults to the full amount, but the shopper may have
+      // only found/bought some of them (e.g. 2 of 5 requested).
+      quantities: new Map(reqs.map((r) => [r.id, r.quantity])),
       weight: 'normal',
       linkUrl: null,
       warning: null,
@@ -877,12 +881,18 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
 
   const itemRows = reqs.map((r) => {
     const hasPrice = r.price !== null && r.price !== undefined;
+    if (!state.quantities.has(r.id)) state.quantities.set(r.id, r.quantity);
+    const qty = state.quantities.get(r.id);
+    const qtyInput = r.quantity > 1
+      ? `<input type="number" class="link-item-qty" min="1" max="${r.quantity}" step="1" value="${qty}" data-link-item="${r.id}" title="How many of the ${r.quantity} requested to include">`
+      : '';
     return `
-      <label class="link-item-row${hasPrice ? '' : ' no-price'}">
+      <div class="link-item-row${hasPrice ? '' : ' no-price'}">
         <input type="checkbox" class="link-item-checkbox" data-link-item="${r.id}" ${state.selected.has(r.id) ? 'checked' : ''}>
-        <span class="link-item-name">${escapeHtml(r.item)}${r.quantity > 1 ? ` x${r.quantity}` : ''}</span>
+        <span class="link-item-name">${escapeHtml(r.item)}${r.quantity > 1 ? ` <em>(of ${r.quantity})</em>` : ''}</span>
+        ${qtyInput}
         <span class="link-item-price">${hasPrice ? formatMoney(r.price) : 'no price'}</span>
-      </label>
+      </div>
     `;
   }).join('');
 
@@ -1021,6 +1031,19 @@ shoppingListContent.addEventListener('change', (e) => {
   if (weightRadio) {
     const customer = e.target.closest('.shopping-group-payment').dataset.customer;
     customerLinkState[customer].weight = weightRadio.value;
+    return;
+  }
+
+  const qtyInput = e.target.closest('.link-item-qty');
+  if (qtyInput) {
+    const customer = e.target.closest('.shopping-group-payment').dataset.customer;
+    const state = customerLinkState[customer];
+    const itemId = Number(qtyInput.dataset.linkItem);
+    const req = shoppingRequests.find((r) => r.id === itemId);
+    const max = req ? req.quantity : Infinity;
+    const clamped = Math.min(max, Math.max(1, Math.round(Number(qtyInput.value)) || 1));
+    qtyInput.value = clamped;
+    state.quantities.set(itemId, clamped);
   }
 });
 
@@ -1130,7 +1153,7 @@ shoppingListContent.addEventListener('click', async (e) => {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        items: selectedItems.map((r) => ({ name: r.item, price: r.price, quantity: r.quantity })),
+        items: selectedItems.map((r) => ({ name: r.item, price: r.price, quantity: state.quantities.get(r.id) ?? r.quantity })),
         packageWeight: state.weight,
       }),
     });

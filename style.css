@@ -469,7 +469,11 @@ header h1 {
   align-items: center;
   gap: 8px;
   font-size: 0.8rem;
+}
+
+.link-item-row input[type="checkbox"] {
   cursor: pointer;
+  flex-shrink: 0;
 }
 
 .link-item-name {
@@ -478,6 +482,21 @@ header h1 {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.link-item-name em {
+  font-style: normal;
+  color: var(--muted);
+}
+
+.link-item-qty {
+  width: 44px;
+  flex-shrink: 0;
+  padding: 3px 4px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.78rem;
+  text-align: center;
 }
 
 .link-item-price {
