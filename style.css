@@ -687,6 +687,26 @@ header h1 {
   display: none;
 }
 
+.finance-filter-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-bottom: 14px;
+}
+
+.finance-filter-row label {
+  font-size: 0.85rem;
+  color: var(--muted);
+}
+
+.finance-filter-row select {
+  padding: 7px 9px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  font-size: 0.85rem;
+  background: var(--card);
+}
+
 .finance-summary {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));

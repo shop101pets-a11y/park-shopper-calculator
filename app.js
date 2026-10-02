@@ -270,6 +270,46 @@ const statDebit = document.getElementById('stat-debit');
 const statEarnings = document.getElementById('stat-earnings');
 const statShopperFee = document.getElementById('stat-shopper-fee');
 const statTips = document.getElementById('stat-tips');
+const financeMonthFilterSelect = document.getElementById('finance-month-filter');
+
+let financeMonthFilter = '';
+
+// Buckets orders by the actual order date (not whenever we happened to
+// sync), same reasoning order_created_at exists for in the first place.
+function monthKey(dateStr) {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  if (Number.isNaN(d.getTime())) return null;
+  return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}`;
+}
+
+function monthLabel(key) {
+  const [year, month] = key.split('-').map(Number);
+  return new Date(year, month - 1, 1).toLocaleDateString('en-US', { month: 'long', year: 'numeric' });
+}
+
+// Rebuilds the dropdown's options from whatever months actually have
+// orders right now - called whenever financeRows changes, not on every
+// render, so the open dropdown doesn't get rebuilt while picking a month.
+function populateFinanceMonthOptions() {
+  const keys = [...new Set(financeRows.map((r) => monthKey(r.orderDate)).filter(Boolean))]
+    .sort()
+    .reverse();
+  financeMonthFilterSelect.innerHTML = '<option value="">All months</option>'
+    + keys.map((k) => `<option value="${k}">${monthLabel(k)}</option>`).join('');
+
+  if (keys.includes(financeMonthFilter)) {
+    financeMonthFilterSelect.value = financeMonthFilter;
+  } else {
+    financeMonthFilter = '';
+    financeMonthFilterSelect.value = '';
+  }
+}
+
+financeMonthFilterSelect.addEventListener('change', () => {
+  financeMonthFilter = financeMonthFilterSelect.value;
+  renderFinances();
+});
 
 async function loadFinanceRows() {
   try {
@@ -279,6 +319,7 @@ async function loadFinanceRows() {
       throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
     }
     financeRows = data.rows;
+    populateFinanceMonthOptions();
     renderFinances();
   } catch (err) {
     syncError.textContent = `Couldn't load saved orders: ${err.message}`;
@@ -300,6 +341,7 @@ syncOrdersBtn.addEventListener('click', async () => {
     }
 
     financeRows = data.rows;
+    populateFinanceMonthOptions();
     renderFinances();
   } catch (err) {
     syncError.textContent = `Couldn't sync from Square: ${err.message}`;
@@ -449,7 +491,13 @@ financeTableBody.addEventListener('change', async (e) => {
 
 function renderFinances() {
   financeTableBody.innerHTML = '';
-  financeEmptyState.style.display = financeRows.length ? 'none' : 'block';
+
+  const filteredRows = financeMonthFilter
+    ? financeRows.filter((row) => monthKey(row.orderDate) === financeMonthFilter)
+    : financeRows;
+
+  financeEmptyState.style.display = filteredRows.length ? 'none' : 'block';
+  financeEmptyState.textContent = financeRows.length ? 'No orders in this month.' : 'No orders yet.';
 
   const orderIds = new Set();
   let debitBalance = 0;
@@ -457,7 +505,7 @@ function renderFinances() {
   let shopperFeeSum = 0;
   let tipSum = 0;
 
-  financeRows.forEach((row) => {
+  filteredRows.forEach((row) => {
     orderIds.add(row.orderId);
 
     const total = row.itemPrice + row.shopperFee + row.tip + row.shipping;
