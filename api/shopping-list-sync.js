@@ -45,6 +45,18 @@ module.exports = async (req, res) => {
     }
 
     const [headers, ...rawRows] = valuesData.values || [];
+
+    // TEMP DEBUG: ?debug=headers shows header names plus the non-empty cells of the newest rows
+    if (req.query?.debug === 'headers') {
+      const lastRows = rawRows.slice(-3).map((cells) => {
+        const filled = {};
+        cells.forEach((c, i) => { if (c && !/^https?:/.test(c)) filled[`${i}:${headers[i]}`] = String(c).slice(0, 60); });
+        return filled;
+      });
+      res.status(200).json({ headerCount: headers.length, headers: headers.map((h, i) => `${i}: ${h}`), lastRows });
+      return;
+    }
+
     if (!headers) {
       res.status(200).json({ requests: [], _debug: { rowsFound: 0 } });
       return;
