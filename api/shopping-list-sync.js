@@ -45,18 +45,6 @@ module.exports = async (req, res) => {
     }
 
     const [headers, ...rawRows] = valuesData.values || [];
-
-    // TEMP DEBUG: ?debug=headers shows header names plus the non-empty cells of the newest rows
-    if (req.query?.debug === 'headers') {
-      const lastRows = rawRows.slice(-3).map((cells) => {
-        const filled = {};
-        cells.forEach((c, i) => { if (c && !/^https?:/.test(c)) filled[`${i}:${headers[i]}`] = String(c).slice(0, 60); });
-        return filled;
-      });
-      res.status(200).json({ headerCount: headers.length, headers: headers.map((h, i) => `${i}: ${h}`), lastRows });
-      return;
-    }
-
     if (!headers) {
       res.status(200).json({ requests: [], _debug: { rowsFound: 0 } });
       return;
@@ -80,6 +68,7 @@ module.exports = async (req, res) => {
 
     let newlyTagged = 0;
     let imagesBackfilled = 0;
+    let contactsBackfilled = 0;
 
     for (const r of candidates) {
       const fileId = extractDriveFileId(r.referenceImageUrl);
@@ -103,20 +92,34 @@ module.exports = async (req, res) => {
           await sql`UPDATE shopping_requests SET tags = ${tags} WHERE id = ${inserted[0].id}`;
           newlyTagged += 1;
         }
-      } else if (r.referenceImageUrl) {
+      } else {
         // A duplicate hit means this row already existed - if it was
-        // inserted before a parser fix and is missing an image the sheet
-        // actually has, fill the gap. Only ever fills a NULL, so this can
-        // never overwrite a photo that's already set (including one
-        // manually assigned via the assign-photo picker).
-        const backfilled = await sql`
-          UPDATE shopping_requests
-          SET reference_image_url = ${r.referenceImageUrl}, reference_image_file_id = ${fileId}
-          WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
-            AND reference_image_file_id IS NULL AND reference_image_url IS NULL
-          RETURNING id
-        `;
-        if (backfilled.length) imagesBackfilled += 1;
+        // inserted before a parser fix and is missing data the sheet
+        // actually has, fill the gap. Each only ever fills a missing value,
+        // so neither can overwrite something already set (a photo assigned
+        // via the picker, or a customer name edited by hand).
+        if (r.referenceImageUrl) {
+          const backfilled = await sql`
+            UPDATE shopping_requests
+            SET reference_image_url = ${r.referenceImageUrl}, reference_image_file_id = ${fileId}
+            WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
+              AND reference_image_file_id IS NULL AND reference_image_url IS NULL
+            RETURNING id
+          `;
+          if (backfilled.length) imagesBackfilled += 1;
+        }
+        if (r.customer !== 'Unknown') {
+          const fixed = await sql`
+            UPDATE shopping_requests
+            SET customer = ${r.customer}, contact_phone = ${r.phone || null},
+                contact_email = ${r.email || null}, contact_instagram = ${r.instagram || null},
+                contact_preference = ${r.contactPreference}
+            WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
+              AND customer = 'Unknown'
+            RETURNING id
+          `;
+          if (fixed.length) contactsBackfilled += 1;
+        }
       }
     }
 
@@ -145,7 +148,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled, contactsBackfilled },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

@@ -19,6 +19,7 @@ const IMAGE_HEADER_RE = /image|picture/i;
 const QUANTITY_HEADER_RE = /quantity/i;
 const SIZE_HEADER_RE = /size/i;
 const OVERFLOW_HEADER_RE = /please add description of items/i;
+const CONTACT_TITLED_HEADER_RE = /name and contact info/i;
 const CONTACT_HEADER_RE = /^Column \d+$/;
 const CONTACT_PREFERENCE_HEADER_RE = /preferred communication/i;
 const NOTES_HEADER_RE = /questions.*comments|comments.*feedback|feeback/i;
@@ -89,7 +90,11 @@ function guessContactPreference({ phone, email, instagram }) {
 function parseFormRows(headers, rows, submittedAtOf) {
   const itemGroups = findItemGroups(headers);
   const overflowHeaders = headers.filter((h) => h && OVERFLOW_HEADER_RE.test(h));
-  const contactHeader = headers.find((h) => h && CONTACT_HEADER_RE.test(h));
+  // Once the form gave the contact question a real title, prefer that; the
+  // untitled "Column N" is just what Google calls it when there's no title
+  // (and can be left behind, empty, after the question gets retitled).
+  const contactHeader = headers.find((h) => h && CONTACT_TITLED_HEADER_RE.test(h));
+  const legacyContactHeader = headers.find((h) => h && CONTACT_HEADER_RE.test(h));
   const preferenceHeader = headers.find((h) => h && CONTACT_PREFERENCE_HEADER_RE.test(h));
   const notesHeader = headers.find((h) => h && NOTES_HEADER_RE.test(h));
 
@@ -101,6 +106,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
     // answer instead (e.g. "Instagram @handle", "Call/text 201-805-6942") -
     // so fall back to parsing that free text when the contact column is empty.
     const rawContact = (contactHeader && row[contactHeader])
+      || (legacyContactHeader && row[legacyContactHeader])
       || (preferenceHeader && row[preferenceHeader])
       || null;
     const contact = parseContact(rawContact);
