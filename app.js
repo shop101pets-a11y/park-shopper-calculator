@@ -815,6 +815,56 @@ async function loadUnassignedPhotos() {
   }
 }
 
+// --- Live refresh ---
+// Several people update the list from different phones at once, so each
+// open copy quietly re-fetches the list and shows what changed. Polling
+// rather than a push connection because Vercel's serverless functions can't
+// hold one open. It only runs while this tab is visible and on screen, and
+// stands down whenever someone is mid-edit so a refresh never wipes what
+// they're typing or reverts a change that's still being saved.
+const SHOPPING_POLL_MS = 5000;
+const SHOPPING_QUIET_MS = 4000;
+let lastShoppingInteraction = 0;
+let shoppingPollInFlight = false;
+
+['click', 'change', 'input'].forEach((type) => {
+  shoppingListContent.addEventListener(type, () => { lastShoppingInteraction = Date.now(); }, true);
+});
+
+function shoppingListIsBusy() {
+  const active = document.activeElement;
+  const editingInList = active && shoppingListContent.contains(active) && active.matches('input, select, textarea');
+  return Boolean(editingInList) || Date.now() - lastShoppingInteraction < SHOPPING_QUIET_MS;
+}
+
+async function pollShoppingList() {
+  if (document.hidden || shoppingPollInFlight) return;
+  if (tabs.shoppingList.view.classList.contains('hidden')) return;
+  if (shoppingListIsBusy()) return;
+
+  shoppingPollInFlight = true;
+  try {
+    const response = await fetch('/api/shopping-list');
+    if (!response.ok) return;
+    const data = await response.json();
+    // Someone may have started editing while the request was out.
+    if (shoppingListIsBusy()) return;
+    if (JSON.stringify(data.requests) !== JSON.stringify(shoppingRequests)) {
+      shoppingRequests = data.requests;
+      renderShoppingList();
+    }
+  } catch {
+    // transient network hiccup - the next tick tries again
+  } finally {
+    shoppingPollInFlight = false;
+  }
+}
+
+setInterval(pollShoppingList, SHOPPING_POLL_MS);
+document.addEventListener('visibilitychange', () => {
+  if (!document.hidden) pollShoppingList();
+});
+
 function renderTagCloud() {
   const allTags = [...new Set(shoppingRequests.flatMap((r) => r.tags))].sort();
   shoppingTagCloud.innerHTML = allTags.map((tag) => `
