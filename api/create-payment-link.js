@@ -13,16 +13,24 @@ module.exports = async (req, res) => {
     return;
   }
 
-  const { items, packageWeight } = req.body || {};
+  const { items, packageWeight, customShipping } = req.body || {};
 
   if (!Array.isArray(items) || items.length === 0) {
     res.status(400).json({ error: 'items is required and must be a non-empty array' });
     return;
   }
 
-  const shippingCents = SHIPPING_FEE_CENTS[packageWeight];
+  let shippingCents = SHIPPING_FEE_CENTS[packageWeight];
+  if (packageWeight === 'custom') {
+    const dollars = Number(customShipping);
+    if (customShipping === '' || customShipping === null || customShipping === undefined || !Number.isFinite(dollars) || dollars < 0) {
+      res.status(400).json({ error: 'customShipping must be a number of dollars, 0 or more' });
+      return;
+    }
+    shippingCents = Math.round(dollars * 100);
+  }
   if (shippingCents === undefined) {
-    res.status(400).json({ error: 'packageWeight must be one of: light, normal, heavy, none' });
+    res.status(400).json({ error: 'packageWeight must be one of: light, normal, heavy, none, custom' });
     return;
   }
 

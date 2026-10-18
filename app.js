@@ -51,9 +51,28 @@ const paymentLinkUrlInput = document.getElementById('payment-link-url');
 const copyLinkBtn = document.getElementById('copy-link-btn');
 const paymentLinkError = document.getElementById('payment-link-error');
 
+const customShippingInput = document.getElementById('custom-shipping-input');
+
 function getSelectedWeight() {
   return document.querySelector('input[name="package-weight"]:checked').value;
 }
+
+function getCustomShipping() {
+  const value = parseFloat(customShippingInput.value);
+  return Number.isFinite(value) && value >= 0 ? value : null;
+}
+
+function getShippingFee() {
+  const weight = getSelectedWeight();
+  return weight === 'custom' ? (getCustomShipping() ?? 0) : SHIPPING_FEES[weight];
+}
+
+// Typing an amount means they want it - select Custom instead of making
+// them click the radio first.
+customShippingInput.addEventListener('input', () => {
+  document.querySelector('input[name="package-weight"][value="custom"]').checked = true;
+  render();
+});
 
 form.addEventListener('submit', (e) => {
   e.preventDefault();
@@ -112,6 +131,13 @@ createLinkBtn.addEventListener('click', async () => {
 
   paymentLinkError.style.display = 'none';
   paymentLinkResult.style.display = 'none';
+
+  if (getSelectedWeight() === 'custom' && getCustomShipping() === null) {
+    paymentLinkError.textContent = 'Enter a shipping amount for Custom (use 0 for free shipping).';
+    paymentLinkError.style.display = 'block';
+    return;
+  }
+
   createLinkBtn.disabled = true;
   createLinkBtn.textContent = 'Creating link...';
 
@@ -122,6 +148,7 @@ createLinkBtn.addEventListener('click', async () => {
       body: JSON.stringify({
         items: items.map((item) => ({ name: item.name, price: item.price, quantity: item.quantity })),
         packageWeight: getSelectedWeight(),
+        customShipping: getCustomShipping(),
       }),
     });
 
@@ -202,8 +229,7 @@ function buildSummary() {
     ].join('\n');
   });
 
-  const weight = getSelectedWeight();
-  const shippingFee = SHIPPING_FEES[weight];
+  const shippingFee = getShippingFee();
   const itemsTotal = items.reduce((sum, item) => sum + calcItemTotal(item.price, item.quantity), 0);
   const orderTotal = Math.round((itemsTotal + shippingFee) * 100) / 100;
 
@@ -919,6 +945,7 @@ function getCustomerLinkState(customer, reqs) {
       // only found/bought some of them (e.g. 2 of 5 requested).
       quantities: new Map(reqs.map((r) => [r.id, r.quantity])),
       weight: 'normal',
+      customShipping: '',
       linkUrl: null,
       warning: null,
       error: null,
@@ -965,6 +992,10 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
         ${weightOption('normal', 'Normal', '$8.35')}
         ${weightOption('heavy', 'Heavy', '$9.86')}
         ${weightOption('none', 'Already charged', '$0')}
+        <label class="weight-option">
+          <input type="radio" name="${weightName}" value="custom" ${state.weight === 'custom' ? 'checked' : ''}>
+          <span>Custom <em><input type="number" class="custom-shipping-input" min="0" step="0.01" placeholder="$0.00" value="${escapeHtml(String(state.customShipping))}"></em></span>
+        </label>
       </div>
       <button type="button" class="btn-add btn-full generate-link-btn" ${state.generating ? 'disabled' : ''}>${state.generating ? 'Creating link...' : 'Generate payment link'}</button>
       ${state.warning ? `<p class="payment-link-error">${escapeHtml(state.warning)}</p>` : ''}
@@ -1057,6 +1088,18 @@ shoppingListContent.addEventListener('change', async (e) => {
     shoppingListEmptyState.textContent = `Couldn't save change: ${err.message}`;
     shoppingListEmptyState.style.display = 'block';
   }
+});
+
+// Typing a custom amount selects Custom. Updates the radio in place rather
+// than re-rendering, which would steal focus mid-typing.
+shoppingListContent.addEventListener('input', (e) => {
+  const input = e.target.closest('.custom-shipping-input');
+  if (!input) return;
+  const customer = input.closest('.shopping-group-payment').dataset.customer;
+  const state = customerLinkState[customer];
+  state.customShipping = input.value;
+  state.weight = 'custom';
+  input.closest('.weight-option').querySelector('input[type="radio"]').checked = true;
 });
 
 shoppingListContent.addEventListener('change', (e) => {
@@ -1218,6 +1261,12 @@ shoppingListContent.addEventListener('click', async (e) => {
     renderShoppingList();
     return;
   }
+  const customShipping = parseFloat(state.customShipping);
+  if (state.weight === 'custom' && !(Number.isFinite(customShipping) && customShipping >= 0)) {
+    state.error = 'Enter a shipping amount for Custom (use 0 for free shipping).';
+    renderShoppingList();
+    return;
+  }
 
   state.error = null;
   state.warning = null;
@@ -1232,6 +1281,7 @@ shoppingListContent.addEventListener('click', async (e) => {
       body: JSON.stringify({
         items: selectedItems.map((r) => ({ name: r.item, price: r.price, quantity: state.quantities.get(r.id) ?? r.quantity })),
         packageWeight: state.weight,
+        customShipping: state.weight === 'custom' ? customShipping : undefined,
       }),
     });
     const data = await response.json();
