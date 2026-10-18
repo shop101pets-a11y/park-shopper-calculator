@@ -957,7 +957,6 @@ function requestCardHtml(req) {
         <div class="card-item">${details}</div>
         <div class="card-footer">
           <select data-field="status">${statusOptionsHtml(req)}</select>
-          <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
           ${priceInputHtml(req)}
         </div>
       </div>
