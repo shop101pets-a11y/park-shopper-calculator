@@ -45,6 +45,20 @@ module.exports = async (req, res) => {
     }
 
     const [headers, ...rawRows] = valuesData.values || [];
+
+    // TEMP DEBUG: ?debug=ship lists headers and the distinct answers in shipping-ish columns
+    if (req.query?.debug === 'ship') {
+      const shipCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => /ship|countr|international|where|located|based|outside|\bus\b/i.test(h || ''));
+      const distinct = {};
+      shipCols.forEach(({ h, i }) => {
+        const counts = {};
+        rawRows.forEach((cells) => { const v = (cells[i] || '').toString().trim(); if (v) counts[v.slice(0, 80)] = (counts[v.slice(0, 80)] || 0) + 1; });
+        distinct[`${i}: ${h}`] = counts;
+      });
+      res.status(200).json({ headerCount: headers.length, tail: headers.slice(42).map((h, k) => `${42 + k}: ${h}`), distinct });
+      return;
+    }
+
     if (!headers) {
       res.status(200).json({ requests: [], _debug: { rowsFound: 0 } });
       return;
