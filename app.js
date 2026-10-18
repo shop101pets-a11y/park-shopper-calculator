@@ -673,7 +673,6 @@ function renderTracking(orders) {
 
 // --- Shopping List ---
 let shoppingRequests = [];
-let shoppingView = 'product';
 let shoppingDisplay = 'card';
 let shoppingTagFilter = '';
 let shoppingStatusFilter = '';
@@ -681,8 +680,6 @@ let shoppingNoPhotoOnly = false;
 let customerLinkState = {};
 let unassignedPhotos = [];
 
-const shoppingViewProductBtn = document.getElementById('shopping-view-product-btn');
-const shoppingViewCustomerBtn = document.getElementById('shopping-view-customer-btn');
 const shoppingDisplayCardBtn = document.getElementById('shopping-display-card-btn');
 const shoppingDisplayListBtn = document.getElementById('shopping-display-list-btn');
 const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
@@ -743,20 +740,6 @@ shoppingSquareRefreshBtn.addEventListener('click', async () => {
   }
 });
 
-
-shoppingViewProductBtn.addEventListener('click', () => {
-  shoppingView = 'product';
-  shoppingViewProductBtn.classList.add('active');
-  shoppingViewCustomerBtn.classList.remove('active');
-  renderShoppingList();
-});
-
-shoppingViewCustomerBtn.addEventListener('click', () => {
-  shoppingView = 'customer';
-  shoppingViewCustomerBtn.classList.add('active');
-  shoppingViewProductBtn.classList.remove('active');
-  renderShoppingList();
-});
 
 shoppingTagFilterInput.addEventListener('input', () => {
   shoppingTagFilter = shoppingTagFilterInput.value.trim().toLowerCase();
@@ -1079,11 +1062,6 @@ function renderShoppingList() {
   const renderItems = (reqs) => isCard
     ? `<div class="shopping-card-grid">${reqs.map(requestCardHtml).join('')}</div>`
     : reqs.map(requestRowHtml).join('');
-
-  if (shoppingView === 'product') {
-    shoppingListContent.innerHTML = renderItems(filtered);
-    return;
-  }
 
   const byCustomer = new Map();
   filtered.forEach((r) => {
