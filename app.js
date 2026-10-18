@@ -1045,16 +1045,35 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
   `;
 }
 
+// Search matches the item and its hidden tags, plus whoever asked for it:
+// name, phone, email, Instagram. A phone number is compared by digits only,
+// since customers type theirs every which way - "(619)519-9130",
+// "619-519-9130", "6195199130" - and a search for any of them should find
+// the others.
+function matchesShoppingSearch(r, query) {
+  if (!query) return true;
+
+  const text = [r.item, r.customer, r.contactEmail, r.contactInstagram, r.contactPhone, ...r.tags]
+    .filter(Boolean)
+    .some((value) => String(value).toLowerCase().includes(query));
+  if (text) return true;
+
+  const looksLikePhone = /^[\d\s().+-]+$/.test(query);
+  const queryDigits = query.replace(/\D/g, '');
+  if (!looksLikePhone || queryDigits.length < 3) return false;
+
+  return [r.contactPhone, r.customer]
+    .filter(Boolean)
+    .some((value) => String(value).replace(/\D/g, '').includes(queryDigits));
+}
+
 function renderShoppingList() {
   renderTagCloud();
 
   const filtered = shoppingRequests.filter((r) => {
     if (shoppingStatusFilter && r.status !== shoppingStatusFilter) return false;
     if (shoppingNoPhotoOnly && (r.referenceImageFileId || r.referenceImageUrl)) return false;
-    if (!shoppingTagFilter) return true;
-    const inTags = r.tags.some((t) => t.toLowerCase().includes(shoppingTagFilter));
-    const inItem = r.item.toLowerCase().includes(shoppingTagFilter);
-    return inTags || inItem;
+    return matchesShoppingSearch(r, shoppingTagFilter);
   });
 
   shoppingListEmptyState.style.display = filtered.length ? 'none' : 'block';
