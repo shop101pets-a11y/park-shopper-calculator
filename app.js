@@ -2,6 +2,8 @@ const TAX_RATE = 0.065;
 const FEE_LOW = 3;
 const FEE_HIGH = 5;
 const FEE_THRESHOLD = 25;
+const FEE_PREMIUM = 10;
+const FEE_PREMIUM_THRESHOLD = 100;
 const SHIPPING_FEES = { light: 7.75, normal: 8.35, heavy: 9.86, none: 0 };
 
 /**
@@ -18,6 +20,7 @@ function calcTax(price, quantity) {
 }
 
 function calcShopperFeePerUnit(price) {
+  if (price >= FEE_PREMIUM_THRESHOLD) return FEE_PREMIUM;
   return price < FEE_THRESHOLD ? FEE_LOW : FEE_HIGH;
 }
 

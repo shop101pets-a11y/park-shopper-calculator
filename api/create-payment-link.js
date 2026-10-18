@@ -5,6 +5,8 @@ const TAX_RATE = '6.5';
 const FEE_LOW_CENTS = 300;
 const FEE_HIGH_CENTS = 500;
 const FEE_THRESHOLD_CENTS = 2500;
+const FEE_PREMIUM_CENTS = 1000;
+const FEE_PREMIUM_THRESHOLD_CENTS = 10000;
 const SHIPPING_FEE_CENTS = { light: 775, normal: 835, heavy: 986, none: 0 };
 
 module.exports = async (req, res) => {
@@ -52,10 +54,14 @@ module.exports = async (req, res) => {
       return;
     }
 
-    // Fee is per unit (one shopping trip per item), so its $25 threshold
-    // checks the unit price, then scales by quantity - same math as app.js.
+    // Fee is per unit (one shopping trip per item), so its thresholds
+    // ($25, $100) check the unit price, then scale by quantity - same math
+    // as app.js.
     const priceCents = Math.round(price * 100);
-    const feeCentsPerUnit = priceCents < FEE_THRESHOLD_CENTS ? FEE_LOW_CENTS : FEE_HIGH_CENTS;
+    let feeCentsPerUnit;
+    if (priceCents >= FEE_PREMIUM_THRESHOLD_CENTS) feeCentsPerUnit = FEE_PREMIUM_CENTS;
+    else if (priceCents < FEE_THRESHOLD_CENTS) feeCentsPerUnit = FEE_LOW_CENTS;
+    else feeCentsPerUnit = FEE_HIGH_CENTS;
 
     lineItems.push({
       name,
