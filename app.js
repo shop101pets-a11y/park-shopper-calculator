@@ -892,6 +892,42 @@ function isFoundAndPriced(req) {
   return req.status === 'found' && req.price !== null && req.price !== undefined && req.price !== '';
 }
 
+// The form asks "Shipping": "National (US)" for US, otherwise the customer
+// types where they are. A blank answer (a request from before the form
+// asked) counts as US - nothing says otherwise. Anything else is
+// international, and the typed text is the "from where".
+const US_SHIPPING_RE = /\b(national|domestic|usa|united states)\b|\(us\)|^u\.?s\.?a?\.?$/i;
+
+function isInternationalRequest(req) {
+  const answer = (req.shippingDestination || '').trim();
+  return Boolean(answer) && !US_SHIPPING_RE.test(answer);
+}
+
+// "International - Canada" / "Canada" -> "Canada"; a bare "International"
+// -> '' (they didn't say where).
+function internationalWhere(req) {
+  return (req.shippingDestination || '')
+    .trim()
+    .replace(/^international\b[\s\-:,(]*/i, '')
+    .replace(/\)\s*$/, '')
+    .trim();
+}
+
+// Everything a customer has requested counts, not just what the current
+// filter is showing - a filter hiding their one international item must not
+// bring back US shipping options for them.
+function customerInternationalInfo(customer) {
+  const intl = shoppingRequests.filter((r) => r.customer === customer && isInternationalRequest(r));
+  const places = [...new Set(intl.map(internationalWhere).filter(Boolean))];
+  return { isInternational: intl.length > 0, places };
+}
+
+function internationalBadgeHtml(info) {
+  if (!info.isInternational) return '';
+  const where = info.places.length ? ` &middot; ${escapeHtml(info.places.join(', '))}` : '';
+  return `<span class="intl-badge">International${where}</span>`;
+}
+
 function statusHighlightClass(req) {
   if (req.status === 'paid') return ' status-paid';
   if (isFoundAndPriced(req)) return ' found-priced';
@@ -915,7 +951,7 @@ function requestRowHtml(req) {
     : '';
   return `
     <div class="shopping-request-row${statusHighlightClass(req)}" data-id="${req.id}">
-      <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''}</div>
+      <div>${details}${imageLink ? ` &middot; ${imageLink}` : ''} ${isInternationalRequest(req) ? '<span class="intl-badge">INTL</span>' : ''}</div>
       <select data-field="status">${statusOptionsHtml(req)}</select>
       <input type="text" class="tag-edit-input" data-field="customer" value="${escapeHtml(req.customer)}">
       ${priceInputHtml(req)}
@@ -952,6 +988,7 @@ function requestCardHtml(req) {
   return `
     <div class="shopping-card${statusHighlightClass(req)}" data-id="${req.id}">
       <button type="button" class="btn-delete-request btn-delete-card" data-id="${req.id}" title="Delete">&times;</button>
+      ${isInternationalRequest(req) ? '<span class="intl-card-flag" title="International">INTL</span>' : ''}
       ${photoBlock}
       <div class="card-body">
         <div class="card-item">${details}</div>
@@ -993,6 +1030,14 @@ function getCustomerLinkState(customer, reqs) {
 function customerPaymentPanelHtml(customer, reqs, idx) {
   const state = getCustomerLinkState(customer, reqs);
   const weightName = `link-weight-${idx}`;
+  const intl = customerInternationalInfo(customer);
+
+  // The flat Light/Normal/Heavy prices are US rates, so an international
+  // customer only gets Already charged or Custom. Land on Custom if a US
+  // tier was selected - it can't be left on one that's no longer offered.
+  if (intl.isInternational && !['none', 'custom'].includes(state.weight)) {
+    state.weight = 'custom';
+  }
 
   const itemRows = reqs.map((r) => {
     const hasPrice = r.price !== null && r.price !== undefined;
@@ -1022,10 +1067,13 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
     <div class="shopping-group-payment" data-customer="${escapeHtml(customer)}">
       <h3 class="payment-panel-title">Payment link</h3>
       <div class="link-item-list">${itemRows}</div>
+      ${intl.isInternational ? `<p class="intl-notice">International shipping${intl.places.length ? ` to ${escapeHtml(intl.places.join(', '))}` : ''} - enter your own shipping price (Custom), or Already charged if it's covered.</p>` : ''}
       <div class="weight-options weight-options-compact">
-        ${weightOption('light', 'Light', '$7.75')}
-        ${weightOption('normal', 'Normal', '$8.35')}
-        ${weightOption('heavy', 'Heavy', '$9.86')}
+        ${intl.isInternational ? '' : `
+          ${weightOption('light', 'Light', '$7.75')}
+          ${weightOption('normal', 'Normal', '$8.35')}
+          ${weightOption('heavy', 'Heavy', '$9.86')}
+        `}
         ${weightOption('none', 'Already charged', '$0')}
         <label class="weight-option">
           <input type="radio" name="${weightName}" value="custom" ${state.weight === 'custom' ? 'checked' : ''}>
@@ -1053,7 +1101,7 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
 function matchesShoppingSearch(r, query) {
   if (!query) return true;
 
-  const text = [r.item, r.customer, r.contactEmail, r.contactInstagram, r.contactPhone, ...r.tags]
+  const text = [r.item, r.customer, r.contactEmail, r.contactInstagram, r.contactPhone, r.shippingDestination, ...r.tags]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));
   if (text) return true;
@@ -1093,7 +1141,7 @@ function renderShoppingList() {
   shoppingListContent.innerHTML = [...byCustomer.entries()].map(([customer, reqs], idx) => `
     <div class="shopping-group">
       <div class="shopping-group-title">
-        <span>${escapeHtml(customer)}</span>
+        <span class="shopping-group-name">${escapeHtml(customer)} ${internationalBadgeHtml(customerInternationalInfo(customer))}</span>
         <span class="count-badge">${reqs.length} item${reqs.length > 1 ? 's' : ''}</span>
       </div>
       <div class="shopping-group-split">

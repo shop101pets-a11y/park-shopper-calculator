@@ -45,20 +45,6 @@ module.exports = async (req, res) => {
     }
 
     const [headers, ...rawRows] = valuesData.values || [];
-
-    // TEMP DEBUG: ?debug=ship lists headers and the distinct answers in shipping-ish columns
-    if (req.query?.debug === 'ship') {
-      const shipCols = headers.map((h, i) => ({ h, i })).filter(({ h }) => /ship|countr|international|where|located|based|outside|\bus\b/i.test(h || ''));
-      const distinct = {};
-      shipCols.forEach(({ h, i }) => {
-        const counts = {};
-        rawRows.forEach((cells) => { const v = (cells[i] || '').toString().trim(); if (v) counts[v.slice(0, 80)] = (counts[v.slice(0, 80)] || 0) + 1; });
-        distinct[`${i}: ${h}`] = counts;
-      });
-      res.status(200).json({ headerCount: headers.length, tail: headers.slice(42).map((h, k) => `${42 + k}: ${h}`), distinct });
-      return;
-    }
-
     if (!headers) {
       res.status(200).json({ requests: [], _debug: { rowsFound: 0 } });
       return;
@@ -83,17 +69,20 @@ module.exports = async (req, res) => {
     let newlyTagged = 0;
     let imagesBackfilled = 0;
     let contactsBackfilled = 0;
+    let shippingBackfilled = 0;
 
     for (const r of candidates) {
       const fileId = extractDriveFileId(r.referenceImageUrl);
       const inserted = await sql`
         INSERT INTO shopping_requests
           (customer, contact_phone, contact_email, contact_instagram, contact_preference,
-           item_description, quantity, size, reference_image_url, reference_image_file_id, notes, source, submitted_at)
+           item_description, quantity, size, reference_image_url, reference_image_file_id, notes, source, submitted_at,
+           shipping_destination)
         VALUES
           (${r.customer}, ${r.phone || null}, ${r.email || null}, ${r.instagram || null}, ${r.contactPreference},
            ${r.item}, ${r.quantity || 1}, ${r.size || null}, ${r.referenceImageUrl || null},
-           ${fileId}, ${r.notes || null}, 'google_sheets_sync', ${r.submittedAt || null})
+           ${fileId}, ${r.notes || null}, 'google_sheets_sync', ${r.submittedAt || null},
+           ${r.shippingAnswer || null})
         ON CONFLICT (submitted_at, item_description) DO NOTHING
         RETURNING id
       `;
@@ -121,6 +110,16 @@ module.exports = async (req, res) => {
             RETURNING id
           `;
           if (backfilled.length) imagesBackfilled += 1;
+        }
+        if (r.shippingAnswer) {
+          // Rows saved before the form asked this have no answer stored yet.
+          const filled = await sql`
+            UPDATE shopping_requests SET shipping_destination = ${r.shippingAnswer}
+            WHERE submitted_at = ${r.submittedAt || null} AND item_description = ${r.item}
+              AND shipping_destination IS NULL
+            RETURNING id
+          `;
+          if (filled.length) shippingBackfilled += 1;
         }
         if (r.customer !== 'Unknown') {
           const fixed = await sql`
@@ -162,7 +161,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled, contactsBackfilled },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled, contactsBackfilled, shippingBackfilled },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

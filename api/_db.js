@@ -146,6 +146,10 @@ async function ensureSchema(sql) {
   // match instead of just relabeling it, so the data and the label agree.
   // Permanently idempotent: once no row is left at 'sent', this is a no-op.
   await sql`UPDATE shopping_requests SET status = 'messaged' WHERE status = 'sent'`;
+
+  // The customer's answer to the form's "Shipping" question, kept verbatim:
+  // "National (US)" for US, otherwise whatever they typed (a country).
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS shipping_destination TEXT`;
 }
 
 function rowToJson(row) {
@@ -187,6 +191,7 @@ function shoppingRequestToJson(row) {
     status: row.status,
     price: row.price === null || row.price === undefined ? null : Number(row.price),
     squareOrderId: row.square_order_id,
+    shippingDestination: row.shipping_destination,
     notes: row.notes,
     submittedAt: row.submitted_at,
   };

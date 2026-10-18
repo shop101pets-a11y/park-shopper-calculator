@@ -23,6 +23,9 @@ const CONTACT_TITLED_HEADER_RE = /name and contact info/i;
 const CONTACT_HEADER_RE = /^Column \d+$/;
 const CONTACT_PREFERENCE_HEADER_RE = /preferred communication/i;
 const NOTES_HEADER_RE = /questions.*comments|comments.*feedback|feeback/i;
+// The "are you US based or international?" question - its title is just
+// "Shipping". "National (US)" is the US choice; anything else is typed in.
+const SHIPPING_HEADER_RE = /^\s*shipping\s*$/i;
 
 function normalizePreference(raw) {
   if (!raw || !String(raw).trim()) return null;
@@ -97,6 +100,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
   const legacyContactHeader = headers.find((h) => h && CONTACT_HEADER_RE.test(h));
   const preferenceHeader = headers.find((h) => h && CONTACT_PREFERENCE_HEADER_RE.test(h));
   const notesHeader = headers.find((h) => h && NOTES_HEADER_RE.test(h));
+  const shippingHeader = headers.find((h) => h && SHIPPING_HEADER_RE.test(h));
 
   const candidates = [];
 
@@ -112,6 +116,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
     const contact = parseContact(rawContact);
     const contactPreference = normalizePreference(rawContact) || guessContactPreference(contact);
     const notes = notesHeader ? row[notesHeader] : null;
+    const shippingAnswer = (shippingHeader && String(row[shippingHeader] || '').trim()) || null;
     const submittedAt = submittedAtOf(row);
 
     let itemsFoundInRow = 0;
@@ -128,6 +133,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         email: contact.email,
         instagram: contact.instagram,
         contactPreference,
+        shippingAnswer,
         item: String(itemName).trim(),
         quantity: Number(group.quantityHeader ? row[group.quantityHeader] : 1) || 1,
         size: group.sizeHeader ? row[group.sizeHeader] : null,
@@ -151,6 +157,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         email: contact.email,
         instagram: contact.instagram,
         contactPreference,
+        shippingAnswer,
         item: String(text).trim(),
         quantity: 1,
         size: null,
@@ -169,6 +176,7 @@ function parseFormRows(headers, rows, submittedAtOf) {
         email: contact.email,
         instagram: contact.instagram,
         contactPreference,
+        shippingAnswer,
         item: '',
         quantity: 1,
         size: null,
