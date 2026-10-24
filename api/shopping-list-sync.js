@@ -2,6 +2,7 @@ const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
 const { getGoogleAccessToken, extractDriveFileId } = require('./_google');
 const { parseFormRows, normalizeTimestamp } = require('./_shopping-list-parser');
 const { generateTags } = require('./_ai-tagging');
+const { assignUnassigned } = require('./_assignees');
 
 module.exports = async (req, res) => {
   if (req.method !== 'GET') {
@@ -136,6 +137,10 @@ module.exports = async (req, res) => {
       }
     }
 
+    // New requests (and, the first time, everything) get an owner so nothing
+    // sits unassigned - the split stays even as orders keep arriving.
+    const assignment = await assignUnassigned(sql);
+
     // Backfill any older rows saved before AI tagging existed (or where
     // generation failed at the time). Capped per run so a large backlog
     // can't make a single sync take too long.
@@ -161,7 +166,7 @@ module.exports = async (req, res) => {
 
     res.status(200).json({
       requests: persisted.map(shoppingRequestToJson),
-      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled, contactsBackfilled, shippingBackfilled },
+      _debug: { rowsInSheet: rawRows.length, candidatesParsed: candidates.length, newlyTagged, imagesBackfilled, contactsBackfilled, shippingBackfilled, assigned: assignment.assigned, load: assignment.load },
     });
   } catch (err) {
     res.status(500).json({ error: err.message });

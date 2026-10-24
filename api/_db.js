@@ -150,6 +150,10 @@ async function ensureSchema(sql) {
   // The customer's answer to the form's "Shipping" question, kept verbatim:
   // "National (US)" for US, otherwise whatever they typed (a country).
   await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS shipping_destination TEXT`;
+
+  // Which of the three people is working this request (see _assignees.js).
+  // NULL = nobody yet.
+  await sql`ALTER TABLE shopping_requests ADD COLUMN IF NOT EXISTS assignee TEXT`;
 }
 
 function rowToJson(row) {
@@ -192,6 +196,7 @@ function shoppingRequestToJson(row) {
     price: row.price === null || row.price === undefined ? null : Number(row.price),
     squareOrderId: row.square_order_id,
     shippingDestination: row.shipping_destination,
+    assignee: row.assignee,
     notes: row.notes,
     submittedAt: row.submitted_at,
   };

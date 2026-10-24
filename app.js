@@ -679,6 +679,19 @@ let shoppingRequests = [];
 let shoppingDisplay = 'card';
 let shoppingTagFilter = '';
 let shoppingStatusFilter = '';
+
+// The three people splitting the list (matches api/_assignees.js). Which
+// list a phone is showing is remembered on that phone, so everyone opens
+// straight to their own.
+const ASSIGNEES = ['Sam', 'Dars', 'Joana'];
+const UNASSIGNED_FILTER = '__none';
+const ASSIGNEE_FILTER_KEY = 'shoppingAssigneeFilter';
+let shoppingAssigneeFilter = '';
+try {
+  shoppingAssigneeFilter = localStorage.getItem(ASSIGNEE_FILTER_KEY) || '';
+} catch {
+  // storage blocked (private mode) - just start on Everyone
+}
 let shoppingNoPhotoOnly = false;
 let customerLinkState = {};
 let unassignedPhotos = [];
@@ -687,6 +700,9 @@ const shoppingDisplayCardBtn = document.getElementById('shopping-display-card-bt
 const shoppingDisplayListBtn = document.getElementById('shopping-display-list-btn');
 const shoppingTagFilterInput = document.getElementById('shopping-tag-filter');
 const shoppingStatusFilterSelect = document.getElementById('shopping-status-filter');
+const shoppingAssigneeFilterSelect = document.getElementById('shopping-assignee-filter');
+shoppingAssigneeFilterSelect.value = shoppingAssigneeFilter;
+if (shoppingAssigneeFilterSelect.value !== shoppingAssigneeFilter) shoppingAssigneeFilter = '';
 const shoppingNoPhotoFilterInput = document.getElementById('shopping-no-photo-filter');
 const shoppingTagCloud = document.getElementById('shopping-tag-cloud');
 const shoppingListContent = document.getElementById('shopping-list-content');
@@ -746,6 +762,16 @@ shoppingSquareRefreshBtn.addEventListener('click', async () => {
 
 shoppingTagFilterInput.addEventListener('input', () => {
   shoppingTagFilter = shoppingTagFilterInput.value.trim().toLowerCase();
+  renderShoppingList();
+});
+
+shoppingAssigneeFilterSelect.addEventListener('change', () => {
+  shoppingAssigneeFilter = shoppingAssigneeFilterSelect.value;
+  try {
+    localStorage.setItem(ASSIGNEE_FILTER_KEY, shoppingAssigneeFilter);
+  } catch {
+    // not remembered - still works for this visit
+  }
   renderShoppingList();
 });
 
@@ -1101,7 +1127,7 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
 function matchesShoppingSearch(r, query) {
   if (!query) return true;
 
-  const text = [r.item, r.customer, r.contactEmail, r.contactInstagram, r.contactPhone, r.shippingDestination, ...r.tags]
+  const text = [r.item, r.customer, r.contactEmail, r.contactInstagram, r.contactPhone, r.shippingDestination, r.assignee, ...r.tags]
     .filter(Boolean)
     .some((value) => String(value).toLowerCase().includes(query));
   if (text) return true;
@@ -1115,10 +1141,53 @@ function matchesShoppingSearch(r, query) {
     .some((value) => String(value).replace(/\D/g, '').includes(queryDigits));
 }
 
+// "Sam (21)" - each person's item count beside their name, so an uneven
+// split is visible at a glance. Edits the existing options' text rather than
+// rebuilding them, which would close the dropdown if it's open.
+function updateAssigneeFilterCounts() {
+  const counts = { [UNASSIGNED_FILTER]: 0 };
+  ASSIGNEES.forEach((name) => { counts[name] = 0; });
+  shoppingRequests.forEach((r) => {
+    if (ASSIGNEES.includes(r.assignee)) counts[r.assignee] += 1;
+    else counts[UNASSIGNED_FILTER] += 1;
+  });
+  [...shoppingAssigneeFilterSelect.options].forEach((option) => {
+    if (!option.value) return;
+    const label = option.value === UNASSIGNED_FILTER ? 'Unassigned' : option.value;
+    option.textContent = `${label} (${counts[option.value]})`;
+  });
+}
+
+// The person a customer's items belong to - they're always moved together,
+// so normally everyone agrees; the most common wins if they ever don't.
+function customerAssignee(customer) {
+  const tally = {};
+  shoppingRequests.forEach((r) => {
+    if (r.customer === customer && ASSIGNEES.includes(r.assignee)) tally[r.assignee] = (tally[r.assignee] || 0) + 1;
+  });
+  return Object.entries(tally).sort((a, b) => b[1] - a[1])[0]?.[0] || '';
+}
+
+function assigneeSelectHtml(customer) {
+  const current = customerAssignee(customer);
+  return `
+    <select class="assignee-select${current ? '' : ' unassigned'}" data-customer="${escapeHtml(customer)}" title="Who is working this customer's items">
+      <option value=""${current ? '' : ' selected'}>Unassigned</option>
+      ${ASSIGNEES.map((name) => `<option value="${name}"${current === name ? ' selected' : ''}>${name}</option>`).join('')}
+    </select>
+  `;
+}
+
 function renderShoppingList() {
   renderTagCloud();
+  updateAssigneeFilterCounts();
 
   const filtered = shoppingRequests.filter((r) => {
+    if (shoppingAssigneeFilter === UNASSIGNED_FILTER) {
+      if (r.assignee) return false;
+    } else if (shoppingAssigneeFilter && r.assignee !== shoppingAssigneeFilter) {
+      return false;
+    }
     if (shoppingStatusFilter && r.status !== shoppingStatusFilter) return false;
     if (shoppingNoPhotoOnly && (r.referenceImageFileId || r.referenceImageUrl)) return false;
     return matchesShoppingSearch(r, shoppingTagFilter);
@@ -1142,7 +1211,10 @@ function renderShoppingList() {
     <div class="shopping-group">
       <div class="shopping-group-title">
         <span class="shopping-group-name">${escapeHtml(customer)} ${internationalBadgeHtml(customerInternationalInfo(customer))}</span>
-        <span class="count-badge">${reqs.length} item${reqs.length > 1 ? 's' : ''}</span>
+        <span class="shopping-group-meta">
+          ${assigneeSelectHtml(customer)}
+          <span class="count-badge">${reqs.length} item${reqs.length > 1 ? 's' : ''}</span>
+        </span>
       </div>
       <div class="shopping-group-split">
         <div class="shopping-group-items">${renderItems(reqs)}</div>
@@ -1151,6 +1223,37 @@ function renderShoppingList() {
     </div>
   `).join('');
 }
+
+// Reassigning a customer moves all of their items to the new person at once.
+shoppingListContent.addEventListener('change', async (e) => {
+  const select = e.target.closest('.assignee-select');
+  if (!select) return;
+
+  const customer = select.dataset.customer;
+  const person = select.value || null;
+  const theirs = shoppingRequests.filter((r) => r.customer === customer);
+  const previous = theirs.map((r) => r.assignee);
+
+  theirs.forEach((r) => { r.assignee = person; });
+  renderShoppingList();
+
+  try {
+    const response = await fetch('/api/shopping-list', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ field: 'assignee', customer, value: person }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+  } catch (err) {
+    theirs.forEach((r, i) => { r.assignee = previous[i]; });
+    renderShoppingList();
+    shoppingListEmptyState.textContent = `Couldn't reassign: ${err.message}`;
+    shoppingListEmptyState.style.display = 'block';
+  }
+});
 
 shoppingListContent.addEventListener('change', async (e) => {
   const field = e.target.dataset.field;

@@ -1,7 +1,9 @@
 const { getSql, ensureSchema, shoppingRequestToJson } = require('./_db');
 const { archiveRequestImage } = require('./_google');
+const { ASSIGNEES } = require('./_assignees');
 
 const PATCHABLE_COLUMNS = {
+  assignee: 'assignee',
   tags: 'tags',
   status: 'status',
   notes: 'notes',
@@ -30,7 +32,24 @@ module.exports = async (req, res) => {
     }
 
     if (req.method === 'PATCH') {
-      const { id, field, value } = req.body || {};
+      const { id, field, value, customer } = req.body || {};
+
+      // Reassigning a customer moves all of their active requests together.
+      if (field === 'assignee' && customer) {
+        const person = value || null;
+        if (person !== null && !ASSIGNEES.includes(person)) {
+          res.status(400).json({ error: `assignee must be one of: ${ASSIGNEES.join(', ')} (or empty)` });
+          return;
+        }
+        const moved = await sql`
+          UPDATE shopping_requests SET assignee = ${person}
+          WHERE customer = ${customer} AND deleted_at IS NULL
+          RETURNING id
+        `;
+        res.status(200).json({ updated: moved.length });
+        return;
+      }
+
       if (!id || !PATCHABLE_COLUMNS[field]) {
         res.status(400).json({ error: `id and a valid field (${Object.keys(PATCHABLE_COLUMNS).join(', ')}) are required` });
         return;
@@ -69,6 +88,15 @@ module.exports = async (req, res) => {
             return;
           }
           updated = await sql`UPDATE shopping_requests SET price = ${price} WHERE id = ${id} RETURNING *`;
+          break;
+        }
+        case 'assignee': {
+          const person = value || null;
+          if (person !== null && !ASSIGNEES.includes(person)) {
+            res.status(400).json({ error: `assignee must be one of: ${ASSIGNEES.join(', ')} (or empty)` });
+            return;
+          }
+          updated = await sql`UPDATE shopping_requests SET assignee = ${person} WHERE id = ${id} RETURNING *`;
           break;
         }
         case 'squareOrderId':

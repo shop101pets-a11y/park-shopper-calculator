@@ -383,7 +383,8 @@ header h1 {
   font-size: 0.9rem;
 }
 
-#shopping-status-filter {
+#shopping-status-filter,
+#shopping-assignee-filter {
   padding: 9px 10px;
   border: 1px solid var(--border);
   border-radius: 6px;
@@ -434,6 +435,29 @@ header h1 {
   display: flex;
   justify-content: space-between;
   align-items: center;
+}
+
+.shopping-group-meta {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.assignee-select {
+  padding: 3px 6px;
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  background: var(--card);
+  color: var(--text);
+  font-size: 0.75rem;
+  font-weight: 600;
+}
+
+.assignee-select.unassigned {
+  border-color: #f0c75e;
+  background: #fff9e6;
+  color: #8a5a00;
 }
 
 .shopping-group-name {
