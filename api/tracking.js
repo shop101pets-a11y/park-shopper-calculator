@@ -41,6 +41,24 @@ module.exports = async (req, res) => {
       return;
     }
 
+    if (req.method === 'PATCH') {
+      const { orderIds, trackingNumber } = req.body || {};
+      if (!Array.isArray(orderIds) || orderIds.length === 0) {
+        res.status(400).json({ error: 'orderIds is required and must be a non-empty array' });
+        return;
+      }
+      const value = typeof trackingNumber === 'string' ? trackingNumber.trim() : '';
+      // A typed-in number has no carrier link; the old link (if any) would
+      // point at the previous number, so drop it.
+      await sql`
+        UPDATE finance_rows
+        SET tracking_number = ${value || null}, tracking_url = NULL
+        WHERE order_id = ANY(${orderIds}::text[])
+      `;
+      res.status(200).json({ trackingNumber: value || null });
+      return;
+    }
+
     if (req.method !== 'GET') {
       res.status(405).json({ error: 'Method not allowed' });
       return;

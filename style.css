@@ -218,6 +218,48 @@ header h1 {
   white-space: nowrap;
 }
 
+.tracking-number {
+  user-select: all;
+}
+
+.tracking-input {
+  width: 170px;
+  padding: 4px 8px;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.85rem;
+}
+
+.btn-edit-tracking,
+.btn-save-tracking,
+.btn-edit-tracking-cancel {
+  padding: 3px 8px;
+  background: white;
+  border: 1px solid var(--border);
+  border-radius: 5px;
+  font-size: 0.75rem;
+  cursor: pointer;
+  white-space: nowrap;
+}
+
+.btn-save-tracking {
+  background: var(--accent);
+  border-color: var(--accent);
+  color: white;
+}
+
+.btn-save-tracking:disabled {
+  opacity: 0.6;
+  cursor: default;
+}
+
+.tracking-error {
+  display: block;
+  margin-top: 4px;
+  font-size: 0.75rem;
+  color: #b91c1c;
+}
+
 .btn-copy-tracking:hover {
   border-color: var(--accent);
   color: var(--accent);

@@ -651,28 +651,95 @@ function renderTracking(orders) {
 
   orders.forEach((order) => {
     const tr = document.createElement('tr');
-    const trackingCell = order.trackingNumber
-      ? `
-        <span class="tracking-cell">
-          ${order.trackingUrl
-            ? `<a href="${escapeHtml(order.trackingUrl)}" target="_blank" rel="noopener">${escapeHtml(order.trackingNumber)}</a>`
-            : escapeHtml(order.trackingNumber)}
-          <button class="btn-copy-tracking" type="button" data-tracking="${escapeHtml(order.trackingNumber)}">Copy</button>
-        </span>
-      `
-      : '<span class="empty-state" style="padding:0;">Not yet shipped</span>';
-
     tr.innerHTML = `
       <td><input type="checkbox" class="packed-checkbox" data-order-ids='${JSON.stringify(order.orderIds)}'></td>
       <td>${escapeHtml(order.customer)}</td>
       <td>${escapeHtml(order.items.join(', '))}</td>
       <td>${escapeHtml(order.carrier || '')}</td>
-      <td>${trackingCell}</td>
+      <td class="tracking-td" data-order-ids='${JSON.stringify(order.orderIds)}'>${trackingCellHtml(order.trackingNumber, order.trackingUrl)}</td>
       <td>${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</td>
     `;
     trackingTableBody.appendChild(tr);
   });
 }
+
+// A saved number shows as selectable text with Copy / Edit; with none yet
+// (or while editing) the cell is an input with Save.
+function trackingCellHtml(number, url, editing) {
+  if (number && !editing) {
+    return `
+      <span class="tracking-cell">
+        ${url
+          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(number)}</a>`
+          : `<span class="tracking-number">${escapeHtml(number)}</span>`}
+        <button class="btn-copy-tracking" type="button" data-tracking="${escapeHtml(number)}">Copy</button>
+        <button class="btn-edit-tracking" type="button" data-tracking="${escapeHtml(number)}" data-url="${escapeHtml(url || '')}">Edit</button>
+      </span>
+    `;
+  }
+  return `
+    <span class="tracking-cell">
+      <input type="text" class="tracking-input" value="${escapeHtml(number || '')}" placeholder="Tracking number" data-original="${escapeHtml(number || '')}" data-url="${escapeHtml(url || '')}">
+      <button class="btn-save-tracking" type="button">Save</button>
+      ${number ? '<button class="btn-edit-tracking-cancel" type="button">Cancel</button>' : ''}
+    </span>
+    <span class="tracking-error" style="display:none;"></span>
+  `;
+}
+
+async function saveTracking(td) {
+  const input = td.querySelector('.tracking-input');
+  const saveBtn = td.querySelector('.btn-save-tracking');
+  const errorEl = td.querySelector('.tracking-error');
+  const value = input.value.trim();
+  if (value === input.dataset.original) {
+    // Nothing changed - just go back to the display state.
+    td.innerHTML = trackingCellHtml(value, input.dataset.url || null);
+    return;
+  }
+  saveBtn.disabled = true;
+  saveBtn.textContent = 'Saving...';
+  errorEl.style.display = 'none';
+  try {
+    const response = await fetch('/api/tracking', {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ orderIds: JSON.parse(td.dataset.orderIds), trackingNumber: value }),
+    });
+    const data = await response.json();
+    if (!response.ok) {
+      throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
+    }
+    // A hand-typed number has no carrier link.
+    td.innerHTML = trackingCellHtml(data.trackingNumber, null);
+  } catch (err) {
+    saveBtn.disabled = false;
+    saveBtn.textContent = 'Save';
+    errorEl.textContent = `Couldn't save: ${err.message}`;
+    errorEl.style.display = 'block';
+  }
+}
+
+trackingTableBody.addEventListener('click', (e) => {
+  const td = e.target.closest('.tracking-td');
+  if (!td) return;
+  if (e.target.closest('.btn-save-tracking')) {
+    saveTracking(td);
+  } else if (e.target.closest('.btn-edit-tracking')) {
+    const btn = e.target.closest('.btn-edit-tracking');
+    td.innerHTML = trackingCellHtml(btn.dataset.tracking, btn.dataset.url || null, true);
+    td.querySelector('.tracking-input').focus();
+  } else if (e.target.closest('.btn-edit-tracking-cancel')) {
+    const input = td.querySelector('.tracking-input');
+    td.innerHTML = trackingCellHtml(input.dataset.original, input.dataset.url || null);
+  }
+});
+
+trackingTableBody.addEventListener('keydown', (e) => {
+  if (e.key !== 'Enter' || !e.target.classList.contains('tracking-input')) return;
+  e.preventDefault();
+  saveTracking(e.target.closest('.tracking-td'));
+});
 
 // --- Shopping List ---
 let shoppingRequests = [];

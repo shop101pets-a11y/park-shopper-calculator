@@ -71,9 +71,12 @@ module.exports = async (req, res) => {
         VALUES (${row.orderId}, ${row.lineUid}, ${row.customer}, ${row.item}, ${row.quantity}, ${row.itemPrice}, ${row.shopperFee}, ${row.tip}, ${row.shipping}, ${row.squareFee}, ${row.orderCreatedAt}, ${row.trackingNumber}, ${row.carrier}, ${row.trackingUrl})
         ON CONFLICT (order_id, line_uid) DO UPDATE
           SET square_fee = EXCLUDED.square_fee,
-              tracking_number = EXCLUDED.tracking_number,
-              carrier = EXCLUDED.carrier,
-              tracking_url = EXCLUDED.tracking_url,
+              -- Square only wins when it actually has tracking - otherwise a
+              -- number typed in by hand on the Tracking tab would be wiped.
+              tracking_number = COALESCE(EXCLUDED.tracking_number, finance_rows.tracking_number),
+              carrier = COALESCE(EXCLUDED.carrier, finance_rows.carrier),
+              tracking_url = CASE WHEN EXCLUDED.tracking_number IS NOT NULL
+                                  THEN EXCLUDED.tracking_url ELSE finance_rows.tracking_url END,
               order_created_at = COALESCE(finance_rows.order_created_at, EXCLUDED.order_created_at)
       `;
     }
