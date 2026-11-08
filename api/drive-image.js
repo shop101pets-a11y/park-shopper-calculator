@@ -15,7 +15,9 @@ module.exports = async (req, res) => {
   try {
     const { buffer, contentType } = await fetchDriveFile(fileId);
     res.setHeader('Content-Type', contentType);
-    res.setHeader('Cache-Control', 'public, max-age=86400');
+    // s-maxage lets Vercel's CDN serve repeats itself - without it every
+    // device re-downloads each photo through the function (origin transfer).
+    res.setHeader('Cache-Control', 'public, max-age=86400, s-maxage=604800, stale-while-revalidate=86400');
     res.status(200).send(buffer);
   } catch (err) {
     res.status(500).json({ error: err.message });

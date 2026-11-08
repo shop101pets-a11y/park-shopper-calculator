@@ -12,7 +12,22 @@ function getSql() {
   return sqlClient;
 }
 
-async function ensureSchema(sql) {
+// The migrations below are all idempotent, so once is enough per warm
+// serverless instance - re-running ~20 statements on every request (including
+// the Shopping List's frequent refresh checks) just wastes database time.
+let schemaReady = null;
+
+function ensureSchema(sql) {
+  if (!schemaReady) {
+    schemaReady = runSchema(sql).catch((err) => {
+      schemaReady = null;
+      throw err;
+    });
+  }
+  return schemaReady;
+}
+
+async function runSchema(sql) {
   await sql`
     CREATE TABLE IF NOT EXISTS finance_rows (
       id SERIAL PRIMARY KEY,

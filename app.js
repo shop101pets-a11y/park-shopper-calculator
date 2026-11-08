@@ -902,10 +902,26 @@ async function loadUnassignedPhotos() {
 // hold one open. It only runs while this tab is visible and on screen, and
 // stands down whenever someone is mid-edit so a refresh never wipes what
 // they're typing or reverts a change that's still being saved.
-const SHOPPING_POLL_MS = 5000;
+//
+// Every check costs server transfer on Vercel's free plan, so each one is a
+// tiny fingerprint request, the full list is only downloaded when the
+// fingerprint changed, and checking pauses after a few minutes of nobody
+// touching the screen (it resumes on the next touch).
+const SHOPPING_POLL_MS = 15000;
 const SHOPPING_QUIET_MS = 4000;
+const SHOPPING_IDLE_MS = 5 * 60 * 1000;
 let lastShoppingInteraction = 0;
+let lastUserActivity = Date.now();
 let shoppingPollInFlight = false;
+let shoppingListVersion = null;
+
+['pointerdown', 'keydown', 'touchstart', 'scroll'].forEach((type) => {
+  document.addEventListener(type, () => {
+    const wasIdle = Date.now() - lastUserActivity > SHOPPING_IDLE_MS;
+    lastUserActivity = Date.now();
+    if (wasIdle) pollShoppingList();
+  }, { passive: true, capture: true });
+});
 
 ['click', 'change', 'input'].forEach((type) => {
   shoppingListContent.addEventListener(type, () => { lastShoppingInteraction = Date.now(); }, true);
@@ -921,14 +937,21 @@ async function pollShoppingList() {
   if (document.hidden || shoppingPollInFlight) return;
   if (tabs.shoppingList.view.classList.contains('hidden')) return;
   if (shoppingListIsBusy()) return;
+  if (Date.now() - lastUserActivity > SHOPPING_IDLE_MS) return;
 
   shoppingPollInFlight = true;
   try {
+    const checkResponse = await fetch('/api/shopping-list?check=1');
+    if (!checkResponse.ok) return;
+    const { version } = await checkResponse.json();
+    if (version === shoppingListVersion) return;
+
     const response = await fetch('/api/shopping-list');
     if (!response.ok) return;
     const data = await response.json();
     // Someone may have started editing while the request was out.
     if (shoppingListIsBusy()) return;
+    shoppingListVersion = version;
     if (JSON.stringify(data.requests) !== JSON.stringify(shoppingRequests)) {
       shoppingRequests = data.requests;
       renderShoppingList();
@@ -942,7 +965,9 @@ async function pollShoppingList() {
 
 setInterval(pollShoppingList, SHOPPING_POLL_MS);
 document.addEventListener('visibilitychange', () => {
-  if (!document.hidden) pollShoppingList();
+  if (document.hidden) return;
+  lastUserActivity = Date.now();
+  pollShoppingList();
 });
 
 function renderTagCloud() {

@@ -22,6 +22,20 @@ module.exports = async (req, res) => {
     await ensureSchema(sql);
 
     if (req.method === 'GET') {
+      // Cheap change check for the live refresh: a fingerprint of every
+      // active row (all columns, so any edit changes it) computed in the
+      // database, so the phone only downloads the full list when it differs.
+      if (req.query?.check) {
+        const [{ version }] = await sql`
+          SELECT md5(coalesce(string_agg(t::text, '|' ORDER BY t.id), '')) AS version
+          FROM shopping_requests t
+          WHERE t.deleted_at IS NULL
+        `;
+        res.setHeader('Cache-Control', 'no-store');
+        res.status(200).json({ version });
+        return;
+      }
+
       const rows = await sql`
         SELECT * FROM shopping_requests
         WHERE deleted_at IS NULL
