@@ -560,6 +560,7 @@ function renderFinances() {
         <select data-field="discount">
           <option value="20" ${row.discount === 20 ? 'selected' : ''}>20%</option>
           <option value="35" ${row.discount === 35 ? 'selected' : ''}>35%</option>
+          <option value="40" ${row.discount === 40 ? 'selected' : ''}>40%</option>
         </select>
       </td>
       <td>${formatMoney(cost)}</td>
