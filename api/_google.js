@@ -92,6 +92,28 @@ async function fetchDriveFile(fileId) {
   return { buffer, contentType };
 }
 
+// Small preview of a Drive image (Drive renders it, typically ~10-30 KB
+// versus a multi-MB phone original). Returns null when Drive has no
+// thumbnail for the file, so callers can fall back to the full file.
+async function fetchDriveThumbnail(fileId, size = 320) {
+  const token = await getGoogleAccessToken();
+  const authHeader = { Authorization: `Bearer ${token}` };
+  const metaRes = await fetch(`https://www.googleapis.com/drive/v3/files/${fileId}?fields=thumbnailLink`, {
+    headers: authHeader,
+  });
+  if (!metaRes.ok) return null;
+  const { thumbnailLink } = await metaRes.json();
+  if (!thumbnailLink) return null;
+
+  // thumbnailLink ends in a size parameter like "=s220" - ask for ours.
+  const sized = thumbnailLink.replace(/=s\d+$/, `=s${size}`);
+  const thumbRes = await fetch(sized, { headers: authHeader });
+  if (!thumbRes.ok) return null;
+  const contentType = thumbRes.headers.get('content-type') || 'image/jpeg';
+  if (!contentType.startsWith('image/')) return null;
+  return { buffer: Buffer.from(await thumbRes.arrayBuffer()), contentType };
+}
+
 // Moves a file into a different folder (e.g. once its request is done) by
 // swapping its parent - Drive files can have multiple parents, so this
 // removes whichever ones it's currently in and adds the new one.
@@ -172,6 +194,7 @@ module.exports = {
   getGoogleAccessToken,
   extractDriveFileId,
   fetchDriveFile,
+  fetchDriveThumbnail,
   listFilesInFolder,
   moveFileToFolder,
   archiveRequestImage,

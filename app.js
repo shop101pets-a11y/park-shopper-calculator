@@ -993,9 +993,12 @@ shoppingTagCloud.addEventListener('click', (e) => {
 // the file via the real Drive API. Prefers the file ID already stored at
 // import time; falls back to extracting one from the URL for older rows
 // imported before that column existed.
-function referenceImageProxyUrl(req) {
+// Pass preview=true for the small card thumbnails; the default is the full
+// original (what a tapped photo opens). Originals are several MB each, so
+// never use them for thumbnails - it burns through Vercel's transfer limit.
+function referenceImageProxyUrl(req, preview = false) {
   const fileId = req.referenceImageFileId || (req.referenceImageUrl || '').match(/[-\w]{25,}/)?.[0];
-  return fileId ? `/api/drive-image?fileId=${fileId}` : null;
+  return fileId ? `/api/drive-image?fileId=${fileId}${preview ? '&size=thumb' : ''}` : null;
 }
 
 function statusOptionsHtml(req) {
@@ -1059,12 +1062,12 @@ function priceInputHtml(req) {
 
 function requestRowHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
-  const thumbUrl = referenceImageProxyUrl(req);
-  const linkTarget = req.referenceImageUrl || thumbUrl;
+  const thumbUrl = referenceImageProxyUrl(req, true);
+  const linkTarget = req.referenceImageUrl || referenceImageProxyUrl(req);
   const imageLink = linkTarget
     ? `<a href="${escapeHtml(linkTarget)}" target="_blank" rel="noopener">${
         thumbUrl
-          ? `<img src="${escapeHtml(thumbUrl)}" class="ref-thumb" alt="reference photo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'photo'}))">`
+          ? `<img src="${escapeHtml(thumbUrl)}" loading="lazy" class="ref-thumb" alt="reference photo" onerror="this.replaceWith(Object.assign(document.createElement('span'),{textContent:'photo'}))">`
           : 'photo'
       }</a>`
     : '';
@@ -1081,10 +1084,10 @@ function requestRowHtml(req) {
 
 function requestCardHtml(req) {
   const details = `${escapeHtml(req.item)}${req.quantity > 1 ? ` x${req.quantity}` : ''}${req.size ? ` (${escapeHtml(req.size)})` : ''}`;
-  const thumbUrl = referenceImageProxyUrl(req);
-  const linkTarget = req.referenceImageUrl || thumbUrl;
+  const thumbUrl = referenceImageProxyUrl(req, true);
+  const linkTarget = req.referenceImageUrl || referenceImageProxyUrl(req);
   const photo = thumbUrl
-    ? `<img src="${escapeHtml(thumbUrl)}" class="card-thumb" alt="reference photo" onerror="this.parentElement.classList.add('no-photo');this.replaceWith(Object.assign(document.createElement('span'),{textContent:'No photo'}))">`
+    ? `<img src="${escapeHtml(thumbUrl)}" loading="lazy" class="card-thumb" alt="reference photo" onerror="this.parentElement.classList.add('no-photo');this.replaceWith(Object.assign(document.createElement('span'),{textContent:'No photo'}))">`
     : '';
   const noPhotoContent = unassignedPhotos.length
     ? `
@@ -1093,7 +1096,7 @@ function requestCardHtml(req) {
         <div class="assign-photo-thumbs">
           ${unassignedPhotos.map((p) => `
             <div class="assign-photo-option">
-              <img src="/api/drive-image?fileId=${p.id}" class="assign-photo-thumb" data-file-id="${p.id}" data-request-id="${req.id}" title="${escapeHtml(p.name)}" alt="${escapeHtml(p.name)}">
+              <img src="/api/drive-image?fileId=${p.id}&size=thumb" loading="lazy" class="assign-photo-thumb" data-file-id="${p.id}" data-request-id="${req.id}" title="${escapeHtml(p.name)}" alt="${escapeHtml(p.name)}">
               <button type="button" class="btn-discard-photo" data-file-id="${p.id}" title="Remove - not needed as an option anymore">&times;</button>
             </div>
           `).join('')}
