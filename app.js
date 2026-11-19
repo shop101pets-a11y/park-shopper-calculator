@@ -1149,6 +1149,111 @@ function getCustomerLinkState(customer, reqs) {
   return customerLinkState[customer];
 }
 
+// --- Text message to the customer ---
+// "Send message" opens the phone's own Messages app with the customer's
+// number and a ready-made text (found items, prices, payment link) - nothing
+// is sent until the shopper hits Send there. On a computer, where there is no
+// Messages app to open, it copies the text instead.
+function customerPhone(customer) {
+  const raw = shoppingRequests.find((r) => r.customer === customer && r.contactPhone)?.contactPhone || '';
+  // Keep digits and a leading "+" (international), drop spaces/dashes/parens.
+  const cleaned = raw.trim().replace(/(?!^\+)\D/g, '');
+  return cleaned.replace(/\D/g, '').length >= 7 ? cleaned : '';
+}
+
+// What the generated link was built from, so the message never carries a
+// link that no longer matches the items/shipping currently picked.
+function linkSignature(customer) {
+  const state = customerLinkState[customer];
+  const ids = shoppingRequests
+    .filter((r) => r.customer === customer && state.selected.has(r.id))
+    .map((r) => `${r.id}x${state.quantities.get(r.id) ?? r.quantity}@${r.price}`)
+    .sort();
+  return `${ids.join(',')}|${state.weight}|${state.weight === 'custom' ? state.customShipping : ''}`;
+}
+
+function messageReadiness(customer) {
+  const state = customerLinkState[customer];
+  const selected = shoppingRequests.filter((r) => r.customer === customer && state.selected.has(r.id));
+  if (!selected.length) return { ready: false, reason: 'Select at least one item above.' };
+  if (selected.some((r) => r.price === null || r.price === undefined)) {
+    return { ready: false, reason: 'Every selected item needs a price.' };
+  }
+  if (state.weight === 'custom') {
+    const custom = parseFloat(state.customShipping);
+    if (!(Number.isFinite(custom) && custom >= 0)) return { ready: false, reason: 'Enter a shipping amount.' };
+  }
+  const phone = customerPhone(customer);
+  if (!phone) return { ready: false, reason: 'No phone number saved for this customer.' };
+  return { ready: true, selected, phone };
+}
+
+function buildCustomerMessage(customer, selected, url) {
+  const state = customerLinkState[customer];
+  const firstName = customer && customer !== 'Unknown' ? customer.trim().split(/\s+/)[0] : 'there';
+  const lines = selected.map((r) => {
+    const qty = state.quantities.get(r.id) ?? r.quantity;
+    return `* ${r.item}${qty > 1 ? ` x${qty}` : ''} is $${(r.price * qty).toFixed(2)}`;
+  });
+  return [
+    `Hi ${firstName}, this is Orlando Park Shopper. I found your ${selected.length === 1 ? 'item' : 'items'}:`,
+    '',
+    ...lines,
+    '',
+    `Here is the payment link: ${url}`,
+    'Let me know if you have any questions or need modifications.',
+  ].join('\n');
+}
+
+function messageButtonHtml(customer) {
+  const state = customerLinkState[customer];
+  const { ready, reason } = messageReadiness(customer);
+  return `
+    <button type="button" class="send-message-btn btn-full" ${ready && !state.generating ? '' : 'disabled'}>Send message</button>
+    <p class="message-hint"${ready ? ' style="display:none;"' : ''}>${escapeHtml(reason || '')}</p>
+    ${state.messageNote ? `<p class="message-note">${escapeHtml(state.messageNote)}</p>` : ''}
+  `;
+}
+
+// Checkbox / shipping / price edits don't re-render the panel, so keep each
+// button's greyed-out state in step with them.
+function updateMessageButtons() {
+  shoppingListContent.querySelectorAll('.shopping-group-payment').forEach((panel) => {
+    const customer = panel.dataset.customer;
+    if (!customerLinkState[customer]) return;
+    const { ready, reason } = messageReadiness(customer);
+    panel.querySelector('.send-message-btn').disabled = !ready || customerLinkState[customer].generating;
+    const hint = panel.querySelector('.message-hint');
+    hint.textContent = reason || '';
+    hint.style.display = ready ? 'none' : '';
+  });
+}
+
+function isPhoneBrowser() {
+  return /Android|iPhone|iPad|iPod/i.test(navigator.userAgent)
+    || (/Macintosh/i.test(navigator.userAgent) && navigator.maxTouchPoints > 1);
+}
+
+async function sendCustomerMessage(customer) {
+  const readiness = messageReadiness(customer);
+  if (!readiness.ready) return;
+  const state = customerLinkState[customer];
+
+  if (!state.linkUrl || state.linkSignature !== linkSignature(customer)) {
+    const created = await generatePaymentLink(customer);
+    if (!created) return;
+  }
+
+  const body = buildCustomerMessage(customer, readiness.selected, state.linkUrl);
+  if (isPhoneBrowser()) {
+    window.location.href = `sms:${readiness.phone}?&body=${encodeURIComponent(body)}`;
+  } else {
+    await copyText(body);
+    state.messageNote = 'Message copied - paste it into your texting app.';
+    renderShoppingList();
+  }
+}
+
 function customerPaymentPanelHtml(customer, reqs, idx) {
   const state = getCustomerLinkState(customer, reqs);
   const weightName = `link-weight-${idx}`;
@@ -1203,6 +1308,7 @@ function customerPaymentPanelHtml(customer, reqs, idx) {
         </label>
       </div>
       <button type="button" class="btn-add btn-full generate-link-btn" ${state.generating ? 'disabled' : ''}>${state.generating ? 'Creating link...' : 'Generate payment link'}</button>
+      ${messageButtonHtml(customer)}
       ${state.warning ? `<p class="payment-link-error">${escapeHtml(state.warning)}</p>` : ''}
       ${state.error ? `<p class="payment-link-error">${escapeHtml(state.error)}</p>` : ''}
       ${state.linkUrl ? `
@@ -1539,35 +1645,48 @@ shoppingListContent.addEventListener('click', async (e) => {
     return;
   }
 
+  const messageBtn = e.target.closest('.send-message-btn');
+  if (messageBtn) {
+    await sendCustomerMessage(messageBtn.closest('.shopping-group-payment').dataset.customer);
+    return;
+  }
+
   const generateBtn = e.target.closest('.generate-link-btn');
   if (!generateBtn) return;
 
-  const customer = e.target.closest('.shopping-group-payment').dataset.customer;
+  await generatePaymentLink(e.target.closest('.shopping-group-payment').dataset.customer);
+});
+
+// Creates the Square payment link for the items currently ticked. Returns
+// true when a link was made (and is now in the customer's state).
+async function generatePaymentLink(customer) {
   const state = customerLinkState[customer];
   const selectedItems = shoppingRequests.filter((r) => r.customer === customer && state.selected.has(r.id));
 
   if (!selectedItems.length) {
     state.error = 'Select at least one item to include.';
     renderShoppingList();
-    return;
+    return false;
   }
   const missingPrice = selectedItems.find((r) => r.price === null || r.price === undefined);
   if (missingPrice) {
     state.error = `"${missingPrice.item}" needs a price before generating a link.`;
     renderShoppingList();
-    return;
+    return false;
   }
   const customShipping = parseFloat(state.customShipping);
   if (state.weight === 'custom' && !(Number.isFinite(customShipping) && customShipping >= 0)) {
     state.error = 'Enter a shipping amount for Custom (use 0 for free shipping).';
     renderShoppingList();
-    return;
+    return false;
   }
 
   state.error = null;
   state.warning = null;
+  state.messageNote = null;
   state.linkUrl = null;
   state.generating = true;
+  const signature = linkSignature(customer);
   renderShoppingList();
 
   try {
@@ -1585,6 +1704,7 @@ shoppingListContent.addEventListener('click', async (e) => {
       throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
     }
     state.linkUrl = data.url;
+    state.linkSignature = signature;
 
     // Tag every included item with this order's id so "Refresh from Square"
     // can later look up its payment status and mark them paid automatically.
@@ -1610,6 +1730,13 @@ shoppingListContent.addEventListener('click', async (e) => {
     state.generating = false;
     renderShoppingList();
   }
+  return Boolean(state.linkUrl);
+}
+
+// Ticking items, picking shipping or typing a price changes whether the
+// message button is allowed - none of those re-render the panel.
+['change', 'input'].forEach((type) => {
+  shoppingListContent.addEventListener(type, updateMessageButtons);
 });
 
 render();

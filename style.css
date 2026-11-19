@@ -338,6 +338,30 @@ header h1 {
   cursor: not-allowed;
 }
 
+.send-message-btn {
+  margin-top: 8px;
+  border: none;
+  border-radius: 6px;
+  background: var(--success);
+  color: white;
+  cursor: pointer;
+}
+
+.send-message-btn:disabled {
+  background: #cbd5e1;
+  color: #64748b;
+  opacity: 1;
+}
+
+.message-hint,
+.message-note {
+  margin: 6px 0 0;
+  font-size: 0.8rem;
+  color: #64748b;
+}
+
+.message-note { color: var(--success); }
+
 .payment-link-result {
   display: flex;
   gap: 8px;
