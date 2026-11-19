@@ -1193,7 +1193,7 @@ function buildCustomerMessage(customer, selected, url) {
   const firstName = customer && customer !== 'Unknown' ? customer.trim().split(/\s+/)[0] : 'there';
   const lines = selected.map((r) => {
     const qty = state.quantities.get(r.id) ?? r.quantity;
-    return `* ${r.item}${qty > 1 ? ` x${qty}` : ''} is $${(r.price * qty).toFixed(2)}`;
+    return `• ${r.item}${qty > 1 ? ` x${qty}` : ''} is $${(r.price * qty).toFixed(2)}`;
   });
   return [
     `Hi ${firstName}, this is Orlando Park Shopper. I found your ${selected.length === 1 ? 'item' : 'items'}:`,
