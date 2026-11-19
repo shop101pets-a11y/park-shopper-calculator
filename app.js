@@ -1201,7 +1201,7 @@ function buildCustomerMessage(customer, selected, url) {
     ...lines,
     '',
     `Here is the payment link: ${url}`,
-    'Let me know if you have any questions or need modifications.',
+    'Let me know if you have any questions.',
   ].join('\n');
 }
 
