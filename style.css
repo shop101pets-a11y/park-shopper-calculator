@@ -219,7 +219,22 @@ header h1 {
 }
 
 .tracking-number {
-  user-select: all;
+  color: var(--accent);
+  word-break: break-all;
+}
+
+.send-tracking-msg-btn {
+  width: auto;
+  margin-top: 0;
+  padding: 6px 12px;
+  font-size: 0.8rem;
+  white-space: nowrap;
+}
+
+.tracking-msg-note {
+  display: block;
+  max-width: 160px;
+  white-space: normal;
 }
 
 .tracking-input {

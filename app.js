@@ -652,35 +652,99 @@ function renderTracking(orders) {
 
   orders.forEach((order) => {
     const tr = document.createElement('tr');
+    // Kept on the row so editing a tracking number can refresh the carrier,
+    // link and message button without reloading the whole table.
+    tr._order = order;
     tr.innerHTML = `
       <td><input type="checkbox" class="packed-checkbox" data-order-ids='${JSON.stringify(order.orderIds)}'></td>
       <td>${escapeHtml(order.customer)}</td>
+      <td>${escapeHtml(order.contactPhone || order.contactInstagram || '')}</td>
       <td>${escapeHtml(order.items.join(', '))}</td>
-      <td>${escapeHtml(order.carrier || '')}</td>
-      <td class="tracking-td" data-order-ids='${JSON.stringify(order.orderIds)}'>${trackingCellHtml(order.trackingNumber, order.trackingUrl)}</td>
+      <td class="carrier-td"></td>
+      <td class="tracking-td" data-order-ids='${JSON.stringify(order.orderIds)}'></td>
       <td>${order.orderDate ? new Date(order.orderDate).toLocaleDateString() : ''}</td>
+      <td class="tracking-message-td"></td>
     `;
+    updateTrackingRow(tr);
     trackingTableBody.appendChild(tr);
   });
 }
 
-// A saved number shows as selectable text with Copy / Edit; with none yet
-// (or while editing) the cell is an input with Save.
-function trackingCellHtml(number, url, editing) {
+// --- Carrier + tracking link ---
+// Square only gives us a carrier and link for labels bought through Pirate
+// Ship. A number typed in by hand has neither, so work them out from the
+// number's format (and fall back to a universal tracker) so every number can
+// still be a clickable link to a tracking page.
+const CARRIER_BY_KEYWORD = { usps: 'USPS', ups: 'UPS', fedex: 'FedEx', dhl: 'DHL' };
+
+function normalizeCarrier(name) {
+  const match = (name || '').toLowerCase().match(/usps|ups|fedex|dhl/);
+  return match ? CARRIER_BY_KEYWORD[match[0]] : (name || '').trim();
+}
+
+function inferCarrier(number) {
+  const n = number.replace(/\s+/g, '').toUpperCase();
+  if (/^1Z[0-9A-Z]{16}$/.test(n)) return 'UPS';
+  if (/^9[2-5]\d{18,22}$/.test(n) || /^[A-Z]{2}\d{9}US$/.test(n)) return 'USPS';
+  if (/^96\d{20}$/.test(n) || /^(\d{12}|\d{15})$/.test(n)) return 'FedEx';
+  if (/^\d{10}$/.test(n)) return 'DHL';
+  return '';
+}
+
+function carrierTrackingUrl(carrier, number) {
+  const n = encodeURIComponent(number.replace(/\s+/g, ''));
+  switch (carrier) {
+    case 'USPS': return `https://tools.usps.com/go/TrackConfirmAction?tLabels=${n}`;
+    case 'UPS': return `https://www.ups.com/track?tracknum=${n}`;
+    case 'FedEx': return `https://www.fedex.com/fedextrack/?trknbr=${n}`;
+    case 'DHL': return `https://www.dhl.com/us-en/home/tracking/tracking-express.html?submit=1&tracking-id=${n}`;
+    default: return `https://parcelsapp.com/en/tracking/${n}`;
+  }
+}
+
+// One entry per tracking number on the row (usually just one). The stored
+// carrier and link only line up with a number when there's exactly one.
+function trackingEntries(order) {
+  const numbers = (order.trackingNumber || '').split(/\s*,\s*/).filter(Boolean);
+  return numbers.map((number) => {
+    const single = numbers.length === 1;
+    const carrier = (single && normalizeCarrier(order.carrier)) || inferCarrier(number);
+    const url = (single && order.trackingUrl) || carrierTrackingUrl(carrier, number);
+    return { number, carrier, url };
+  });
+}
+
+// Refreshes the cells that depend on the order's tracking number.
+function updateTrackingRow(tr, editing) {
+  const order = tr._order;
+  const entries = trackingEntries(order);
+  tr.querySelector('.carrier-td').textContent = [...new Set(entries.map((e) => e.carrier).filter(Boolean))].join(', ');
+  tr.querySelector('.tracking-td').innerHTML = trackingCellHtml(order, entries, editing);
+  tr.querySelector('.tracking-message-td').innerHTML = `
+    <button type="button" class="send-message-btn send-tracking-msg-btn" ${order.trackingNumber ? '' : 'disabled'} ${order.trackingNumber ? '' : 'title="Add a tracking number first"'}>Send message</button>
+    <span class="tracking-msg-note message-note"></span>
+  `;
+}
+
+// A saved number shows as a link to its tracking page with Copy / Edit; with
+// none yet (or while editing) the cell is an input with Save.
+function trackingCellHtml(order, entries, editing) {
+  const number = order.trackingNumber;
   if (number && !editing) {
+    const links = entries
+      .map((e) => `<a class="tracking-number" href="${escapeHtml(e.url)}" target="_blank" rel="noopener">${escapeHtml(e.number)}</a>`)
+      .join(', ');
     return `
       <span class="tracking-cell">
-        ${url
-          ? `<a href="${escapeHtml(url)}" target="_blank" rel="noopener">${escapeHtml(number)}</a>`
-          : `<span class="tracking-number">${escapeHtml(number)}</span>`}
+        ${links}
         <button class="btn-copy-tracking" type="button" data-tracking="${escapeHtml(number)}">Copy</button>
-        <button class="btn-edit-tracking" type="button" data-tracking="${escapeHtml(number)}" data-url="${escapeHtml(url || '')}">Edit</button>
+        <button class="btn-edit-tracking" type="button">Edit</button>
       </span>
     `;
   }
   return `
     <span class="tracking-cell">
-      <input type="text" class="tracking-input" value="${escapeHtml(number || '')}" placeholder="Tracking number" data-original="${escapeHtml(number || '')}" data-url="${escapeHtml(url || '')}">
+      <input type="text" class="tracking-input" value="${escapeHtml(number || '')}" placeholder="Tracking number" data-original="${escapeHtml(number || '')}">
       <button class="btn-save-tracking" type="button">Save</button>
       ${number ? '<button class="btn-edit-tracking-cancel" type="button">Cancel</button>' : ''}
     </span>
@@ -689,13 +753,14 @@ function trackingCellHtml(number, url, editing) {
 }
 
 async function saveTracking(td) {
+  const tr = td.closest('tr');
   const input = td.querySelector('.tracking-input');
   const saveBtn = td.querySelector('.btn-save-tracking');
   const errorEl = td.querySelector('.tracking-error');
   const value = input.value.trim();
   if (value === input.dataset.original) {
     // Nothing changed - just go back to the display state.
-    td.innerHTML = trackingCellHtml(value, input.dataset.url || null);
+    updateTrackingRow(tr);
     return;
   }
   saveBtn.disabled = true;
@@ -711,8 +776,12 @@ async function saveTracking(td) {
     if (!response.ok) {
       throw new Error(typeof data.error === 'string' ? data.error : JSON.stringify(data.error));
     }
-    // A hand-typed number has no carrier link.
-    td.innerHTML = trackingCellHtml(data.trackingNumber, null);
+    // A hand-typed number has no stored carrier or link - they're worked out
+    // from the number itself.
+    tr._order.trackingNumber = data.trackingNumber;
+    tr._order.carrier = null;
+    tr._order.trackingUrl = null;
+    updateTrackingRow(tr);
   } catch (err) {
     saveBtn.disabled = false;
     saveBtn.textContent = 'Save';
@@ -721,18 +790,57 @@ async function saveTracking(td) {
   }
 }
 
+// "Hi Dee, here's the tracking num for USPS: <link>" - one line per package.
+function buildTrackingMessage(order) {
+  const name = customerFirstName(order.customer);
+  return trackingEntries(order).map((e, i) => {
+    const forCarrier = e.carrier ? ` for ${e.carrier}` : '';
+    return i === 0
+      ? `Hi ${name}, here's the tracking num${forCarrier}: ${e.url}`
+      : `And the tracking num${forCarrier}: ${e.url}`;
+  }).join('\n');
+}
+
+async function sendTrackingMessage(tr, btn) {
+  const order = tr._order;
+  if (!order.trackingNumber) return;
+  const body = buildTrackingMessage(order);
+  const phone = cleanPhoneNumber(order.contactPhone);
+
+  if (phone && isPhoneBrowser()) {
+    window.location.href = `sms:${phone}?&body=${encodeURIComponent(body)}`;
+    return;
+  }
+
+  // No Messages app to open (computer), or only an Instagram handle / no
+  // contact saved - put the text on the clipboard instead.
+  await copyText(body);
+  const where = phone ? 'your texting app' : order.contactInstagram ? 'Instagram' : 'a message';
+  const note = tr.querySelector('.tracking-msg-note');
+  note.textContent = phone || order.contactInstagram
+    ? `Message copied - paste it into ${where}.`
+    : 'No contact saved for this customer - message copied.';
+  clearTimeout(note._hideTimer);
+  note._hideTimer = setTimeout(() => { note.textContent = ''; }, 5000);
+}
+
 trackingTableBody.addEventListener('click', (e) => {
+  const messageBtn = e.target.closest('.send-tracking-msg-btn');
+  if (messageBtn) {
+    if (!messageBtn.disabled) sendTrackingMessage(messageBtn.closest('tr'), messageBtn);
+    return;
+  }
+
   const td = e.target.closest('.tracking-td');
   if (!td) return;
+  const tr = td.closest('tr');
   if (e.target.closest('.btn-save-tracking')) {
     saveTracking(td);
   } else if (e.target.closest('.btn-edit-tracking')) {
-    const btn = e.target.closest('.btn-edit-tracking');
-    td.innerHTML = trackingCellHtml(btn.dataset.tracking, btn.dataset.url || null, true);
-    td.querySelector('.tracking-input').focus();
+    updateTrackingRow(tr, true);
+    tr.querySelector('.tracking-input').focus();
   } else if (e.target.closest('.btn-edit-tracking-cancel')) {
-    const input = td.querySelector('.tracking-input');
-    td.innerHTML = trackingCellHtml(input.dataset.original, input.dataset.url || null);
+    updateTrackingRow(tr);
   }
 });
 
@@ -1154,11 +1262,18 @@ function getCustomerLinkState(customer, reqs) {
 // number and a ready-made text (found items, prices, payment link) - nothing
 // is sent until the shopper hits Send there. On a computer, where there is no
 // Messages app to open, it copies the text instead.
-function customerPhone(customer) {
-  const raw = shoppingRequests.find((r) => r.customer === customer && r.contactPhone)?.contactPhone || '';
+function cleanPhoneNumber(raw) {
   // Keep digits and a leading "+" (international), drop spaces/dashes/parens.
-  const cleaned = raw.trim().replace(/(?!^\+)\D/g, '');
+  const cleaned = (raw || '').trim().replace(/(?!^\+)\D/g, '');
   return cleaned.replace(/\D/g, '').length >= 7 ? cleaned : '';
+}
+
+function customerFirstName(customer) {
+  return customer && customer !== 'Unknown' ? customer.trim().split(/\s+/)[0] : 'there';
+}
+
+function customerPhone(customer) {
+  return cleanPhoneNumber(shoppingRequests.find((r) => r.customer === customer && r.contactPhone)?.contactPhone);
 }
 
 // What the generated link was built from, so the message never carries a
@@ -1190,7 +1305,7 @@ function messageReadiness(customer) {
 
 function buildCustomerMessage(customer, selected, url) {
   const state = customerLinkState[customer];
-  const firstName = customer && customer !== 'Unknown' ? customer.trim().split(/\s+/)[0] : 'there';
+  const firstName = customerFirstName(customer);
   const lines = selected.map((r) => {
     const qty = state.quantities.get(r.id) ?? r.quantity;
     return `• ${r.item}${qty > 1 ? ` x${qty}` : ''} is $${(r.price * qty).toFixed(2)}`;

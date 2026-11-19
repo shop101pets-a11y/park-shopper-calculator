@@ -48,11 +48,12 @@ module.exports = async (req, res) => {
         return;
       }
       const value = typeof trackingNumber === 'string' ? trackingNumber.trim() : '';
-      // A typed-in number has no carrier link; the old link (if any) would
-      // point at the previous number, so drop it.
+      // A typed-in number has no carrier link or known carrier; the old ones
+      // (if any) belonged to the previous number, so drop them - the page
+      // works the carrier and link out from the new number.
       await sql`
         UPDATE finance_rows
-        SET tracking_number = ${value || null}, tracking_url = NULL
+        SET tracking_number = ${value || null}, tracking_url = NULL, carrier = NULL
         WHERE order_id = ANY(${orderIds}::text[])
       `;
       res.status(200).json({ trackingNumber: value || null });
@@ -102,11 +103,36 @@ module.exports = async (req, res) => {
       }
     }
 
+    // Contact details live on the Shopping List requests, not the Square
+    // orders. Match on the order id the payment link was tagged with, falling
+    // back to the customer's name. Deleted requests still count - packing an
+    // order removes its Shopping List items, but the contact is still needed.
+    const contactRows = await sql`
+      SELECT customer, square_order_id, contact_phone, contact_instagram
+      FROM shopping_requests
+      WHERE contact_phone IS NOT NULL OR contact_instagram IS NOT NULL
+      ORDER BY submitted_at DESC NULLS LAST, id DESC
+    `;
+    const contactByOrderId = new Map();
+    const contactByName = new Map();
+    for (const c of contactRows) {
+      const contact = { phone: c.contact_phone || null, instagram: c.contact_instagram || null };
+      if (c.square_order_id && !contactByOrderId.has(c.square_order_id)) contactByOrderId.set(c.square_order_id, contact);
+      const key = normalizeName(c.customer);
+      if (!contactByName.has(key)) contactByName.set(key, contact);
+    }
+
     const orders = [...groups.values()]
       .map((g) => {
         const trackingNumbers = [...g.trackingNumbers];
+        const orderIds = [...g.orderIds];
+        const contact = orderIds.map((id) => contactByOrderId.get(id)).find(Boolean)
+          || contactByName.get(normalizeName(g.customer))
+          || {};
         return {
-          orderIds: [...g.orderIds],
+          orderIds,
+          contactPhone: contact.phone || null,
+          contactInstagram: contact.instagram || null,
           customer: g.customer,
           orderDate: g.orderDate,
           items: g.items,
